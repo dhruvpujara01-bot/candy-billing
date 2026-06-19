@@ -36,29 +36,41 @@ if not os.path.exists(STOCK_DB):
 stock_df = pd.read_csv(STOCK_DB)
 inv_df = pd.read_csv(INV_DB)
 
+# Use session state to handle clean page reruns and lock dynamic incremental counters
+if "form_reset_token" not in st.session_state:
+    st.session_state["form_reset_token"] = 0
+
 # --- NAVIGATION ---
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (CREATE, VIEW, EDIT & DELETE HERE)
+# 📝 HOME DASHBOARD (DYNAMIC INLINE RECORDS LISTING)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
-    st.header("🛒 Billing & Records Central Control")
+    st.header("🛒 Billing & Live Records Panel")
+    
+    # Dynamically find the next Invoice ID based on data
     next_id = 1 if inv_df.empty else int(inv_df["Invoice_ID"].max()) + 1
     
     col1, col2 = st.columns([4, 5])
     
-    # LEFT PANEL: NEW INVOICE GENERATOR
+    # LEFT PANEL: INVOICE GENERATOR
     with col1:
-        st.subheader(f"🆕 New Invoice #INV-{next_id:04d}")
-        date_sel = st.date_input("Billing Date", datetime.now().date(), key="new_inv_date")
+        st.subheader(f"🆕 Current Invoice: #INV-{next_id:04d}")
+        date_sel = st.date_input("Billing Date", datetime.now().date(), key=f"date_{st.session_state['form_reset_token']}")
         
         cart = []
         st.markdown("#### Select Quantities")
         for idx, (candy, price) in enumerate(MENU.items()):
             match = stock_df[stock_df["Candy_Name"] == candy]
             curr_stock = match["Available_Stock"].values[0] if not match.empty else 0
-            qty = st.number_input(f"{candy} (₹{price}) | Stock: {curr_stock}", min_value=0, step=1, key=f"q_{idx}")
+            
+            # Form resets input counters back to 0 immediately upon form token revision
+            qty = st.number_input(
+                f"{candy} (₹{price}) | Stock: {curr_stock}", 
+                min_value=0, step=1, 
+                key=f"q_{idx}_{st.session_state['form_reset_token']}"
+            )
             if qty > 0:
                 cart.append({"Candy_Name": candy, "Qty": qty, "Rate": price, "Total_Amount": qty * price})
                 
@@ -75,35 +87,127 @@ if choice == "📝 Home Dashboard":
                 
                 stock_df.to_csv(STOCK_DB, index=False)
                 inv_df.to_csv(INV_DB, index=False)
+                
                 st.success(f"🎉 Invoice #INV-{next_id:04d} saved successfully!")
+                
+                # Increment token to reset the input quantities interface and update invoice number instantly
+                st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: LIVE DATABASE MANAGEMENT (VIEW, DOWNLOAD, EDIT, DELETE)
+    # RIGHT PANEL: SPREADSHEET LIVE ENTRIES ROW WATCHER WITH DIRECT CORRESPONDING ACTION BUTTONS
     with col2:
-        st.subheader("📋 Saved Invoices Database History")
+        st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
-            st.info("No saved invoices found yet.")
+            st.info("No active billing entries found.")
         else:
-            # Quick Action Section for Edit / Delete
-            st.markdown("### ⚡ Quick Actions (Edit or Delete an Invoice)")
-            unique_inv_ids = sorted(inv_df["Invoice_ID"].unique(), reverse=True)
-            action_id = st.selectbox("Select Invoice ID to Edit or Delete", unique_inv_ids, key="action_inv_select")
+            csv_data = inv_df.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Download Database Backup File (CSV)", data=csv_data, file_name="invoice_history.csv", mime="text/csv")
+            st.markdown("---")
             
-            act_col1, act_col2 = st.columns(2)
+            # Group records to display cleanly inside explicit interactive inline boxes
+            unique_saved_ids = sorted(inv_df["Invoice_ID"].unique(), reverse=True)
             
-            # --- ACTION 1: DELETE OPTION ---
-            with act_col1:
-                if st.button(f"🗑️ DELETE INVOICE #INV-{action_id:04d}", type="secondary", use_container_width=True):
-                    # Remove from Database
-                    inv_df = inv_df[inv_df["Invoice_ID"] != action_id]
-                    inv_df.to_csv(INV_DB, index=False)
-                    st.warning(f"💥 Invoice #INV-{action_id:04d} deleted completely!")
-                    st.rerun()
-            
-            # --- ACTION 2: EDIT SYSTEM INLINE ---
-            with act_col2:
-                show_edit_panel = st.checkbox("✏️ Show Edit Inputs Panel", value=False)
+            for target_id in unique_saved_ids:
+                single_inv = inv_df[inv_df["Invoice_ID"] == target_id]
+                inv_date = single_inv["Date"].values[0]
+                inv_total = single_inv["Total_Amount"].sum()
                 
-            if show_edit_panel:
-                st.markdown(f"#### Editing Invoice #INV-{action_id:04d} Below:")
-                inv_rows = inv_df
+                # Creates an explicit isolated border container block for each individual invoice group
+                with st.container(border=True):
+                    header_col, action_col = st.columns([3, 1])
+                    
+                    with header_col:
+                        st.markdown(f"**🧾 Invoice #INV-{target_id:04d}** | 📅 *{inv_date}*")
+                        st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
+                    
+                    with action_col:
+                        # DEDICATED INDIVIDUAL DELETION TRIGGER CORRESPONDING DIRECTLY TO THIS ROW LOG
+                        if st.button("❌ Delete", key=f"del_btn_{target_id}", type="secondary", use_container_width=True):
+                            inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
+                            inv_df.to_csv(INV_DB, index=False)
+                            st.warning(f"Invoice #INV-{target_id:04d} removed.")
+                            st.rerun()
+                    
+                    # Collapsible itemized view breakdown inside the box
+                    with st.expander("🔍 View Purchased Candy Details"):
+                        st.dataframe(
+                            single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
+                            use_container_width=True
+                        )
+
+# ----------------------------------------------------
+# 📊 TAB 2: REPORTS
+# ----------------------------------------------------
+elif choice == "📊 Date & Monthly Reports":
+    st.header("📊 Sales Reports")
+    if inv_df.empty:
+        st.info("No transaction data available.")
+    else:
+        inv_df['Date'] = pd.to_datetime(inv_df['Date'])
+        inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
+        inv_df['Only_Date'] = inv_df['Date'].dt.strftime('%Y-%m-%d')
+        
+        tab_daily, tab_monthly = st.tabs(["📆 Specific Date Search", "📅 Monthly Summary"])
+        
+        with tab_daily:
+            search_date = st.date_input("Select Date", datetime.now().date())
+            daily_filtered = inv_df[inv_df['Only_Date'] == str(search_date)]
+            if daily_filtered.empty:
+                st.warning(f"No transactions recorded on {search_date}.")
+            else:
+                st.metric("Daily Revenue Collected", f"₹{daily_filtered['Total_Amount'].sum():,}")
+                daily_summary = daily_filtered.groupby(["Candy_Name", "Rate"]).agg(Quantities_Sold=("Qty", "sum"), Revenue_Earned=("Total_Amount", "sum")).reset_index()
+                st.dataframe(daily_summary.set_index("Candy_Name"), use_container_width=True)
+        
+        with tab_monthly:
+            selected_month = st.selectbox("Select Month", sorted(inv_df['Year_Month'].unique(), reverse=True))
+            monthly_filtered = inv_df[inv_df['Year_Month'] == selected_month]
+            
+            m_col1, m_col2 = st.columns(2)
+            m_col1.metric(f"Total Revenue for {selected_month}", f"₹{monthly_filtered['Total_Amount'].sum():,}")
+            m_col2.metric("Total Invoices Issued", len(monthly_filtered['Invoice_ID'].unique()))
+            
+            monthly_summary = monthly_filtered.groupby(["Candy_Name", "Rate"]).agg(Total_Qty_Sold=("Qty", "sum"), Total_Revenue=("Total_Amount", "sum")).sort_values(by="Total_Qty_Sold", ascending=False).reset_index()
+            st.dataframe(monthly_summary.set_index("Candy_Name"), use_container_width=True)
+
+# ----------------------------------------------------
+# ⚙️ TAB 3: PRICE SETTINGS
+# ----------------------------------------------------
+elif choice == "⚙️ Price Settings":
+    st.header("⚙️ Menu Management Settings")
+    col_edit, col_add = st.columns(2)
+    with col_edit:
+        st.subheader("✏️ Change Existing Candy Prices")
+        selected_candy = st.selectbox("Select Candy to Modify", menu_df["Candy_Name"].tolist())
+        current_price = menu_df.loc[menu_df["Candy_Name"] == selected_candy, "Price"].values[0]
+        new_price = st.number_input(f"New Price for {selected_candy}", min_value=0.0, value=float(current_price))
+        if st.button("Update Price Record"):
+            menu_df.loc[menu_df["Candy_Name"] == selected_candy, "Price"] = new_price
+            menu_df.to_csv(MENU_DB, index=False)
+            st.success("Price updated successfully!")
+            st.rerun()
+    with col_add:
+        st.subheader("➕ Add New Candy Flavor")
+        new_candy_name = st.text_input("Enter New Flavor Name")
+        new_candy_price = st.number_input("Set Price (₹)", min_value=0.0, value=20.0)
+        if st.button("Save New Candy"):
+            if new_candy_name and new_candy_name not in menu_df["Candy_Name"].values:
+                new_row = pd.DataFrame([{"Candy_Name": new_candy_name, "Price": new_candy_price}])
+                pd.concat([menu_df, new_row], ignore_index=True).to_csv(MENU_DB, index=False)
+                st.success("New item added to store!")
+                st.rerun()
+
+# ----------------------------------------------------
+# 📦 TAB 4: STOCK TRACKER
+# ----------------------------------------------------
+elif choice == "📦 Stock Tracker":
+    st.header("📦 Inventory Levels")
+    st.dataframe(stock_df.set_index("Candy_Name"), use_container_width=True)
+    st.subheader("Restock Units")
+    restock_target = st.selectbox("Select Variant to Restock", stock_df["Candy_Name"].tolist())
+    added_amt = st.number_input("Count of Incoming Inventory Units", min_value=1, step=1)
+    if st.button("Confirm Restock Arrival"):
+        stock_df.loc[stock_df["Candy_Name"] == restock_target, "Available_Stock"] += added_amt
+        stock_df.to_csv(STOCK_DB, index=False)
+        st.success("Stock updated!")
+        st.rerun()
