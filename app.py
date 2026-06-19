@@ -49,7 +49,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (FIXED NUMBER LOGIC FOR PRINT)
+# 📝 HOME DASHBOARD
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -108,7 +108,7 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: RECORD CARDS WITH REBUILT FORMAT STRING TEMPLATE
+    # RIGHT PANEL: RECORD CARDS
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
@@ -129,7 +129,7 @@ if choice == "📝 Home Dashboard":
                 inv_qty_total = int(single_inv["Qty"].sum())
                 
                 saved_cust_name = single_inv["Customer_Name"].values[0] if "Customer_Name" in single_inv.columns else "Walk-in Customer"
-                formatted_id_str = f"{int(target_id):04d}" # Hard string block lock
+                formatted_id_str = f"{int(target_id):04d}"
                 
                 with st.container(border=True):
                     st.markdown(f"### 🧾 Invoice #INV-{formatted_id_str}")
@@ -156,79 +156,32 @@ if choice == "📝 Home Dashboard":
                     <head>
                         <title>Invoice_INV_{formatted_id_str}</title>
                         <style>
-                            @page {{
-                                size: A4;
-                                margin: 20mm;
-                            }}
-                            body {{
-                                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                                color: #333;
-                                margin: 0;
-                                padding: 0;
-                            }}
-                            .invoice-box {{
-                                width: 100%;
-                                max-width: 800px;
-                                margin: auto;
-                            }}
-                            .header-table {{
-                                width: 100%;
-                                margin-bottom: 50px;
-                                border-collapse: collapse;
-                            }}
-                            .title-heading {{
-                                color: #e056fd;
-                                font-size: 34px;
-                                margin: 0;
-                                font-weight: bold;
-                                letter-spacing: 1px;
-                            }}
-                            .main-table {{
-                                width: 100%;
-                                border-collapse: collapse;
-                                margin-top: 30px;
-                            }}
-                            .main-table th {{
-                                background-color: #f8f9fa;
-                                color: #333;
-                                font-weight: bold;
-                                padding: 14px 12px;
-                                border-bottom: 2px solid #333;
-                                border-top: 1px solid #ddd;
-                            }}
-                            .info-data-cell {{
-                                text-align: right; 
-                                font-size: 15px; 
-                                line-height: 1.8;
-                            }}
+                            @page {{ size: A4; margin: 20mm; }}
+                            body {{ font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }}
+                            .invoice-box {{ width: 100%; max-width: 800px; margin: auto; }}
+                            .header-table {{ width: 100%; margin-bottom: 50px; border-collapse: collapse; }}
+                            .title-heading {{ color: #e056fd; font-size: 34px; margin: 0; font-weight: bold; }}
+                            .main-table {{ width: 100%; border-collapse: collapse; margin-top: 30px; }}
+                            .main-table th {{ background-color: #f8f9fa; color: #333; font-weight: bold; padding: 14px 12px; border-bottom: 2px solid #333; }}
+                            .info-data-cell {{ text-align: right; font-size: 15px; line-height: 1.8; }}
                         </style>
                     </head>
                     <body>
                         <div class="invoice-box">
                             <table class="header-table">
                                 <tr>
-                                    <td style="vertical-align: top;">
-                                        <h1 class="title-heading">🍧 CHUSKI LIVE CANDY</h1>
-                                        <div style="font-size: 14px; color: #666; font-style: italic; margin-top: 4px;">Pure Joy in Every Frozen Bite!</div>
-                                    </td>
-                                    <td class="info-data-cell" style="vertical-align: top;">
-                                        <div style="font-size: 26px; font-weight: bold; color: #333; margin-bottom: 12px; letter-spacing: 1px;">TAX INVOICE</div>
+                                    <td><h1 class="title-heading">🍧 CHUSKI LIVE CANDY</h1></td>
+                                    <td class="info-data-cell">
+                                        <div style="font-size: 26px; font-weight: bold; margin-bottom: 12px;">TAX INVOICE</div>
                                         <b>Invoice No:</b> #INV-{formatted_id_str}<br/>
                                         <b>Date:</b> {inv_date}<br/>
-                                        <b>Customer Name:</b> {saved_cust_name}
+                                        <b>Customer:</b> {saved_cust_name}
                                     </td>
                                 </tr>
                             </table>
-                            
                             <table class="main-table">
                                 <thead>
-                                    <tr>
-                                        <th style="width: 10%; text-align: center;">Sr No.</th>
-                                        <th style="text-align: left;">Item Description</th>
-                                        <th style="width: 15%; text-align: center;">Qty</th>
-                                        <th style="width: 20%; text-align: right;">Rate</th>
-                                        <th style="width: 20%; text-align: right;">Total Amount</th>
-                                    </tr>
+                                    <tr><th>Sr No.</th><th>Item Description</th><th>Qty</th><th>Rate</th><th>Total Amount</th></tr>
                                 </thead>
                                 <tbody>
                                     {table_rows}
@@ -240,38 +193,17 @@ if choice == "📝 Home Dashboard":
                                     </tr>
                                 </tbody>
                             </table>
-                            
-                            <div style="margin-top: 100px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
-                                <p style="font-size: 14px; color: #555; margin: 0;">Thank you for your business! Visit us again. 🙏</p>
-                            </div>
                         </div>
-                        <script>
-                            window.onload = function() {{ window.print(); }}
-                        </script>
                     </body>
                     </html>
                     """
                     
                     act_col1, act_col2 = st.columns(2)
                     with act_col1:
-                        st.download_button(
-                            label="🖨️ Download / Print A4 PDF",
-                            data=html_code,
-                            file_name=f"Invoice_INV_{formatted_id_str}.html",
-                            mime="text/html",
-                            key=f"print_html_{int(target_id)}",
-                            use_container_width=True
-                        )
+                        st.download_button(label="🖨️ Download / Print A4 PDF", data=html_code, file_name=f"Invoice_INV_{formatted_id_str}.html", mime="text/html", key=f"print_html_{int(target_id)}", use_container_width=True)
                     with act_col2:
                         single_csv = single_inv.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Download as CSV Data", 
-                            data=single_csv, 
-                            file_name=f"Invoice_INV_{formatted_id_str}.csv", 
-                            mime="text/csv",
-                            key=f"dl_csv_{int(target_id)}",
-                            use_container_width=True
-                        )
+                        st.download_button(label="📥 Download as CSV Data", data=single_csv, file_name=f"Invoice_INV_{formatted_id_str}.csv", mime="text/csv", key=f"dl_csv_{int(target_id)}", use_container_width=True)
                         
                     u_col1, u_col2 = st.columns(2)
                     with u_col1:
@@ -304,11 +236,8 @@ if choice == "📝 Home Dashboard":
                             
                             if new_line_qty > 0:
                                 updated_lines.append({
-                                    "Invoice_ID": target_id, 
-                                    "Date": str(new_inv_date), 
-                                    "Customer_Name": new_cust_field,
-                                    "Candy_Name": line_row['Candy_Name'],
-                                    "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
+                                    "Invoice_ID": target_id, "Date": str(new_inv_date), "Customer_Name": new_cust_field,
+                                    "Candy_Name": line_row['Candy_Name'], "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
                                 })
                         
                         if st.button("💾 Apply Invoice Changes", key=f"save_edit_{int(target_id)}", type="primary", use_container_width=True):
@@ -323,18 +252,19 @@ if choice == "📝 Home Dashboard":
                             st.dataframe(single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), use_container_width=True)
 
 # ----------------------------------------------------
-# 📊 TAB 2: REPORTS
+# 📊 TAB 2: DETAILED DATE-WISE MONTHLY REPORTS
 # ----------------------------------------------------
 elif choice == "📊 Date & Monthly Reports":
     st.header("📊 Sales Reports")
     if inv_df.empty:
         st.info("No transaction data available yet.")
     else:
-        inv_df['Date'] = pd.to_datetime(inv_df['Date'])
-        inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
-        inv_df['Only_Date'] = inv_df['Date'].dt.strftime('%Y-%m-%d')
+        # Standardize date objects securely
+        inv_df['Date_Parsed'] = pd.to_datetime(inv_df['Date'])
+        inv_df['Year_Month'] = inv_df['Date_Parsed'].dt.strftime('%Y-%m')
+        inv_df['Only_Date'] = inv_df['Date_Parsed'].dt.strftime('%Y-%m-%d')
         
-        tab_daily, tab_monthly = st.tabs(["📆 Specific Date Search", "📅 Monthly Summary"])
+        tab_daily, tab_monthly = st.tabs(["📆 Specific Single Date Search", "📅 Monthly Summary (Date-Wise)"])
         
         with tab_daily:
             search_date = st.date_input("Select Date", datetime.now().date())
@@ -347,15 +277,28 @@ elif choice == "📊 Date & Monthly Reports":
                 st.dataframe(daily_summary.set_index("Candy_Name"), use_container_width=True)
         
         with tab_monthly:
-            selected_month = st.selectbox("Select Month", sorted(inv_df['Year_Month'].unique(), reverse=True))
+            selected_month = st.selectbox("Select Month for Report", sorted(inv_df['Year_Month'].unique(), reverse=True))
             monthly_filtered = inv_df[inv_df['Year_Month'] == selected_month]
             
             m_col1, m_col2 = st.columns(2)
             m_col1.metric(f"Total Revenue for {selected_month}", f"₹{monthly_filtered['Total_Amount'].sum():,}")
-            m_col2.metric("Total Invoices Issued", len(monthly_filtered['Invoice_ID'].unique()))
+            m_col2.metric("Total Invoices Issued This Month", len(monthly_filtered['Invoice_ID'].unique()))
             
-            monthly_summary = monthly_filtered.groupby(["Candy_Name", "Rate"]).agg(Total_Qty_Sold=("Qty", "sum"), Total_Revenue=("Total_Amount", "sum")).sort_values(by="Total_Qty_Sold", ascending=False).reset_index()
-            st.dataframe(monthly_summary.set_index("Candy_Name"), use_container_width=True)
+            # --- BRAND NEW UPDATED FEATURE: TRUE DATE-WISE BREAKDOWN ---
+            st.subheader(f"📅 Day-by-Day Sales Tracker for Month: {selected_month}")
+            
+            # Group by explicit Calendar Date and Candy flavor so you can track precisely when each item was sold
+            date_wise_summary = monthly_filtered.groupby(["Only_Date", "Candy_Name", "Rate"]).agg(
+                Quantities_Sold=("Qty", "sum"),
+                Total_Revenue_Earned=("Total_Amount", "sum")
+            ).sort_index(ascending=False) # Show latest date first
+            
+            st.dataframe(date_wise_summary, use_container_width=True)
+            
+            # Simple line chart showing sales growth across the month dates
+            st.markdown("#### 📈 Sales Revenue Trend Line across the Month")
+            chart_data = monthly_filtered.groupby("Only_Date")["Total_Amount"].sum()
+            st.line_chart(chart_data)
 
 # ----------------------------------------------------
 # ⚙️ TAB 3: PRICE SETTINGS
