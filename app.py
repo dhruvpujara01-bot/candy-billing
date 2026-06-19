@@ -34,7 +34,11 @@ if not os.path.exists(STOCK_DB):
     pd.DataFrame([{"Candy_Name": name, "Available_Stock": 500} for name in MENU.keys()]).to_csv(STOCK_DB, index=False)
 
 stock_df = pd.read_csv(STOCK_DB)
-inv_df = pd.read_csv(INV_DB)
+
+try:
+    inv_df = pd.read_csv(INV_DB)
+except Exception:
+    inv_df = pd.DataFrame(columns=["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"])
 
 if "form_reset_token" not in st.session_state:
     st.session_state["form_reset_token"] = 0
@@ -43,12 +47,16 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (WITH PRINTABLE INVOICES)
+# 📝 HOME DASHBOARD (WITH INTEGRATED INLINE EDIT & SAFE DELETE)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
     
-    next_id = 1 if inv_df.empty else int(inv_df["Invoice_ID"].max()) + 1
+    if inv_df.empty or "Invoice_ID" not in inv_df.columns or inv_df["Invoice_ID"].isna().all():
+        next_id = 1
+    else:
+        next_id = int(inv_df["Invoice_ID"].max()) + 1
+    
     col1, col2 = st.columns([4, 5])
     
     # LEFT PANEL: INVOICE GENERATOR
@@ -84,24 +92,26 @@ if choice == "📝 Home Dashboard":
                 stock_df.to_csv(STOCK_DB, index=False)
                 inv_df.to_csv(INV_DB, index=False)
                 
-                st.success(f"🎉 Invoice #INV-{next_id:04d} saved to database history!")
+                st.success(f"🎉 Invoice #INV-{next_id:04d} saved successfully!")
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: RECENT INVOICES LIST & PRINT SLIPS
+    # RIGHT PANEL: RECORD LISTINGS WITH INLINE ACTIONS
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
-            st.info("No active billing entries found.")
+            st.info("No active billing entries found yet. Create your first bill on the left side panel!")
         else:
             csv_data = inv_df.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Download Database Backup (CSV)", data=csv_data, file_name="invoice_history.csv", mime="text/csv")
             st.markdown("---")
             
-            unique_saved_ids = sorted(inv_df["Invoice_ID"].unique(), reverse=True)
+            unique_saved_ids = sorted(inv_df["Invoice_ID"].dropna().unique(), reverse=True)
             
             for target_id in unique_saved_ids:
                 single_inv = inv_df[inv_df["Invoice_ID"] == target_id]
+                if single_inv.empty:
+                    continue
                 inv_date = single_inv["Date"].values[0]
                 inv_total = single_inv["Total_Amount"].sum()
                 
@@ -109,21 +119,21 @@ if choice == "📝 Home Dashboard":
                     header_col, action_col = st.columns([2.5, 2])
                     
                     with header_col:
-                        st.markdown(f"**🧾 Invoice #INV-{target_id:04d}** | 📅 *{inv_date}*")
+                        st.markdown(f"**🧾 Invoice #INV-{int(target_id):04d}** | 📅 *{inv_date}*")
                         st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
                     
                     with action_col:
-                        # --- GENERATE BEAUTIFUL HTML FOR PRINTING ---
+                        # Print Script Template
                         table_rows = ""
                         for _, r in single_inv.iterrows():
                             table_rows += f"<tr><td style='padding:8px;'>{r['Candy_Name']}</td><td style='padding:8px;text-align:center;'>{r['Qty']}</td><td style='padding:8px;text-align:right;'>₹{r['Rate']}</td><td style='padding:8px;text-align:right;'>₹{r['Total_Amount']}</td></tr>"
                         
                         html_receipt = f"""
-                        <div id="print-area-{target_id}" style="padding:20px; font-family:Arial, sans-serif; max-width:400px; border:1px solid #eee; margin:auto;">
+                        <div id="print-area-{int(target_id)}" style="padding:20px; font-family:Arial, sans-serif; max-width:400px; border:1px solid #eee; margin:auto;">
                             <h2 style="text-align:center; color:#e056fd; margin-bottom:2px;">🍧 CHUSKI LIVE CANDY</h2>
                             <p style="text-align:center; font-size:12px; margin-top:0;">Pure Joy in Every Frozen Bite!</p>
                             <hr/>
-                            <p><b>Invoice No:</b> #INV-{target_id:04d}<br/><b>Date:</b> {inv_date}</p>
+                            <p><b>Invoice No:</b> #INV-{int(target_id):04d}<br/><b>Date:</b> {inv_date}</p>
                             <table style="width:100%; border-collapse:collapse; font-size:14px;">
                                 <tr style="background:#f9f9f9; border-bottom:2px solid #ddd;"><th style="text-align:left; padding:8px;">Item</th><th style="padding:8px;">Qty</th><th style="text-align:right; padding:8px;">Rate</th><th style="text-align:right; padding:8px;">Total</th></tr>
                                 {table_rows}
@@ -133,8 +143,8 @@ if choice == "📝 Home Dashboard":
                             <p style="text-align:center; font-size:12px; margin-top:20px; color:#777;">Thank You! Visit Again! 🙏</p>
                         </div>
                         <script>
-                            function printInvoice_{target_id}() {{
-                                var printContents = document.getElementById('print-area-{target_id}').innerHTML;
+                            function printInvoice_{int(target_id)}() {{
+                                var printContents = document.getElementById('print-area-{int(target_id)}').innerHTML;
                                 var originalContents = document.body.innerHTML;
                                 document.body.innerHTML = printContents;
                                 window.print();
@@ -144,29 +154,61 @@ if choice == "📝 Home Dashboard":
                         </script>
                         """
                         
-                        # Printable slip launch button 
                         st.components.v1.html(
                             f"""
                             {html_receipt}
-                            <button onclick="printInvoice_{target_id}()" style="width:100%; background-color:#2ed573; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:14px;">🖨️ Print & Save PDF</button>
+                            <button onclick="printInvoice_{int(target_id)}()" style="width:100%; background-color:#2ed573; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:14px;">🖨️ Print & Save PDF</button>
                             """,
                             height=45
                         )
                         
-                        # Security unlock panel for accidental deletions
-                        confirm_check = st.checkbox("🔓 Unlock Delete", key=f"unlock_{target_id}")
+                        # --- MODIFICATION INTERFACE CONTROLS ---
+                        btn_col1, btn_col2 = st.columns(2)
+                        with btn_col1:
+                            edit_mode = st.checkbox("✏️ Edit", key=f"edit_mode_{int(target_id)}")
+                        with btn_col2:
+                            confirm_check = st.checkbox("🔓 Unlock Del", key=f"unlock_{int(target_id)}")
+                        
+                        # Handle Deletion Execution
                         if confirm_check:
-                            if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{target_id}", type="primary", use_container_width=True):
+                            if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{int(target_id)}", type="primary", use_container_width=True):
                                 inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
                                 inv_df.to_csv(INV_DB, index=False)
-                                st.warning(f"Invoice #INV-{target_id:04d} deleted.")
+                                st.warning(f"Invoice #INV-{int(target_id):04d} deleted.")
                                 st.rerun()
                     
-                    with st.expander("🔍 View Purchased Candy Details"):
-                        st.dataframe(
-                            single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
-                            use_container_width=True
-                        )
+                    # --- INLINE EDIT PANEL DROP EXPANSION ---
+                    if edit_mode:
+                        st.markdown("#### ✏️ Update Invoice Line Values")
+                        updated_lines = []
+                        for line_idx, line_row in single_inv.iterrows():
+                            st.write(f"**Item: {line_row['Candy_Name']}**")
+                            c_qty, c_rate = st.columns(2)
+                            with c_qty:
+                                new_line_qty = st.number_input("Qty", min_value=0, value=int(line_row['Qty']), key=f"eqty_{line_idx}")
+                            with c_rate:
+                                new_line_rate = st.number_input("Rate (₹)", min_value=0.0, value=float(line_row['Rate']), key=f"erate_{line_idx}")
+                            
+                            if new_line_qty > 0:
+                                updated_lines.append({
+                                    "Invoice_ID": target_id, "Date": line_row['Date'], "Candy_Name": line_row['Candy_Name'],
+                                    "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
+                                })
+                        
+                        if st.button("💾 Apply Invoice Changes", key=f"save_edit_{int(target_id)}", type="primary", use_container_width=True):
+                            # Remove old copy and append edited version
+                            inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
+                            if updated_lines:
+                                inv_df = pd.concat([inv_df, pd.DataFrame(updated_lines)], ignore_index=True)
+                            inv_df.to_csv(INV_DB, index=False)
+                            st.success("Invoice lines adjusted safely!")
+                            st.rerun()
+                    else:
+                        with st.expander("🔍 View Purchased Candy Details"):
+                            st.dataframe(
+                                single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
+                                use_container_width=True
+                            )
 
 # ----------------------------------------------------
 # 📊 TAB 2: REPORTS
@@ -174,7 +216,7 @@ if choice == "📝 Home Dashboard":
 elif choice == "📊 Date & Monthly Reports":
     st.header("📊 Sales Reports")
     if inv_df.empty:
-        st.info("No transaction data available.")
+        st.info("No transaction data available yet. Create invoices on the home dashboard first!")
     else:
         inv_df['Date'] = pd.to_datetime(inv_df['Date'])
         inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
