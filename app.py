@@ -49,7 +49,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (A4 PRINT OPTIMIZED)
+# 📝 HOME DASHBOARD
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -125,16 +125,16 @@ if choice == "📝 Home Dashboard":
                 if single_inv.empty:
                     continue
                 inv_date = single_inv["Date"].values[0]
-                inv_total = single_inv["Total_Amount"].sum()
-                inv_qty_total = single_inv["Qty"].sum()
+                inv_total = float(single_inv["Total_Amount"].sum())
+                inv_qty_total = int(single_inv["Qty"].sum())
                 
                 saved_cust_name = single_inv["Customer_Name"].values[0] if "Customer_Name" in single_inv.columns else "Walk-in Customer"
                 
                 with st.container(border=True):
                     st.markdown(f"### 🧾 Invoice #INV-{int(target_id):04d}")
                     st.write(f"👤 **Customer Name:** {saved_cust_name}")
-                    st.write(f"📅 **Date:** {inv_date} | 🔢 **Total Qty Sold:** {inv_qty_total} Pcs")
-                    st.markdown(f"💰 **Grand Total Bill: ₹{inv_total:,}**")
+                    st.write(f"📅 **Date:** {inv_date} | 🔢 **Total Qty:** {inv_qty_total} Pcs")
+                    st.markdown(f"💰 **Grand Total Bill: ₹{inv_total:,.2f}**")
                     
                     table_rows = ""
                     sr_no = 1
@@ -144,13 +144,13 @@ if choice == "📝 Home Dashboard":
                             <td style="padding: 10px; text-align: center;">{sr_no}</td>
                             <td style="padding: 10px;">{r['Candy_Name']}</td>
                             <td style="padding: 10px; text-align: center;">{r['Qty']}</td>
-                            <td style="padding: 10px; text-align: right;">₹{r['Rate']:.2f}</td>
-                            <td style="padding: 10px; text-align: right;">₹{r['Total_Amount']:.2f}</td>
+                            <td style="padding: 10px; text-align: right;">₹{float(r['Rate']):,.2f}</td>
+                            <td style="padding: 10px; text-align: right;">₹{float(r['Total_Amount']):,.2f}</td>
                         </tr>
                         """
                         sr_no += 1
                     
-                    # CLEANLY STYLIZED A4 PAGE SCALING TEMPLATE
+                    # REBUILT PRINT WINDOW WITH CLEAN SPACING AND NUMBER MATH FORMATTING
                     html_code = f"""
                     <html>
                     <head>
@@ -174,14 +174,15 @@ if choice == "📝 Home Dashboard":
                             }}
                             .header-table {{
                                 width: 100%;
-                                margin-bottom: 30px;
+                                margin-bottom: 40px;
                                 border-collapse: collapse;
                             }}
                             .title-heading {{
                                 color: #e056fd;
-                                font-size: 28px;
+                                font-size: 32px;
                                 margin: 0;
                                 font-weight: bold;
+                                letter-spacing: 1px;
                             }}
                             .main-table {{
                                 width: 100%;
@@ -194,6 +195,11 @@ if choice == "📝 Home Dashboard":
                                 font-weight: bold;
                                 padding: 12px;
                                 border-bottom: 2px solid #ddd;
+                                border-top: 1px solid #ddd;
+                            }}
+                            .info-block {{
+                                font-size: 15px; 
+                                line-height: 1.8;
                             }}
                         </style>
                     </head>
@@ -201,15 +207,15 @@ if choice == "📝 Home Dashboard":
                         <div class="invoice-box">
                             <table class="header-table">
                                 <tr>
-                                    <td>
+                                    <td style="vertical-align: top;">
                                         <h1 class="title-heading">🍧 CHUSKI LIVE CANDY</h1>
-                                        <span style="font-size: 13px; color: #666;">Pure Joy in Every Frozen Bite!</span>
+                                        <span style="font-size: 14px; color: #666; font-style: italic;">Pure Joy in Every Frozen Bite!</span>
                                     </td>
-                                    <td style="text-align: right; font-size: 14px; line-height: 1.6;">
-                                        <strong style="font-size: 18px; color: #333;">TAX INVOICE</strong><br/>
+                                    <td style="text-align: right; vertical-align: top;" class="info-block">
+                                        <span style="font-size: 24px; font-weight: bold; color: #333; display: block; margin-bottom: 8px;">TAX INVOICE</span>
                                         <b>Invoice No:</b> #INV-{int(target_id):04d}<br/>
                                         <b>Date:</b> {inv_date}<br/>
-                                        <b>Customer:</b> {saved_cust_name}
+                                        <b>Customer Name:</b> {saved_cust_name}
                                     </td>
                                 </tr>
                             </table>
@@ -217,25 +223,25 @@ if choice == "📝 Home Dashboard":
                             <table class="main-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 8%; text-align: center;">Sr No.</th>
+                                        <th style="width: 10%; text-align: center;">Sr No.</th>
                                         <th style="text-align: left;">Item Description</th>
-                                        <th style="width: 12%; text-align: center;">Qty</th>
-                                        <th style="width: 15%; text-align: right;">Rate</th>
-                                        <th style="width: 18%; text-align: right;">Total Amount</th>
+                                        <th style="width: 15%; text-align: center;">Qty</th>
+                                        <th style="width: 20%; text-align: right;">Rate</th>
+                                        <th style="width: 20%; text-align: right;">Total Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {table_rows}
                                     <tr style="font-weight: bold; font-size: 15px;">
-                                        <td colspan="2" style="padding: 15px 10px; text-align: right; border-top: 2px solid #333;">TOTAL SUMMARY:</td>
-                                        <td style="padding: 15px 10px; text-align: center; border-top: 2px solid #333;">{inv_qty_total} Pcs</td>
+                                        <td colspan="2" style="padding: 16px 10px; text-align: right; border-top: 2px solid #333;">TOTAL SUMMARY:</td>
+                                        <td style="padding: 16px 10px; text-align: center; border-top: 2px solid #333;">{inv_qty_total} Pcs</td>
                                         <td style="border-top: 2px solid #333;"></td>
-                                        <td style="padding: 15px 10px; text-align: right; color: #e056fd; font-size: 16px; border-top: 2px solid #333;">₹{inv_total:,}.00</td>
+                                        <td style="padding: 16px 10px; text-align: right; color: #e056fd; font-size: 16px; border-top: 2px solid #333;">₹{inv_total:,.2f}</td>
                                     </tr>
                                 </tbody>
                             </table>
                             
-                            <div style="margin-top: 60px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
+                            <div style="margin-top: 80px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
                                 <p style="font-size: 14px; color: #555; margin: 0;">Thank you for your business! Visit us again. 🙏</p>
                             </div>
                         </div>
