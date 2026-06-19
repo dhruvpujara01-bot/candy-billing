@@ -49,7 +49,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (FIXED PRINT & TOTALS YIELD)
+# 📝 HOME DASHBOARD (A4 PRINT OPTIMIZED)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -65,7 +65,6 @@ if choice == "📝 Home Dashboard":
     with col1:
         st.subheader(f"🆕 Current Invoice: #INV-{next_id:04d}")
         
-        # NEW CUSTOMER NAME ENTRY FIELD
         cust_name = st.text_input("👤 Enter Customer Name", value="Walk-in Customer", key=f"cust_{st.session_state['form_reset_token']}")
         date_sel = st.date_input("Billing Date", datetime.now().date(), key=f"date_{st.session_state['form_reset_token']}")
         
@@ -109,7 +108,7 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: INVOICES CARD LIST WITH FIXED PDF VIEW & VISIBLE TOTALS
+    # RIGHT PANEL: INVOICES CARD LIST
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
@@ -129,45 +128,116 @@ if choice == "📝 Home Dashboard":
                 inv_total = single_inv["Total_Amount"].sum()
                 inv_qty_total = single_inv["Qty"].sum()
                 
-                # Load saved customer name safely
                 saved_cust_name = single_inv["Customer_Name"].values[0] if "Customer_Name" in single_inv.columns else "Walk-in Customer"
                 
                 with st.container(border=True):
-                    # VISIBLE TOP SUMMARY WITH TOTAL DETAILS WRITTEN OUT
                     st.markdown(f"### 🧾 Invoice #INV-{int(target_id):04d}")
                     st.write(f"👤 **Customer Name:** {saved_cust_name}")
                     st.write(f"📅 **Date:** {inv_date} | 🔢 **Total Qty Sold:** {inv_qty_total} Pcs")
                     st.markdown(f"💰 **Grand Total Bill: ₹{inv_total:,}**")
                     
-                    # Construct HTML text slip manually
                     table_rows = ""
+                    sr_no = 1
                     for _, r in single_inv.iterrows():
-                        table_rows += f"<tr><td style='padding:8px; border-bottom:1px solid #eee;'>{r['Candy_Name']}</td><td style='padding:8px; text-align:center; border-bottom:1px solid #eee;'>{r['Qty']}</td><td style='padding:8px; text-align:right; border-bottom:1px solid #eee;'>₹{r['Rate']}</td><td style='padding:8px; text-align:right; border-bottom:1px solid #eee;'>₹{r['Total_Amount']}</td></tr>"
+                        table_rows += f"""
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; text-align: center;">{sr_no}</td>
+                            <td style="padding: 10px;">{r['Candy_Name']}</td>
+                            <td style="padding: 10px; text-align: center;">{r['Qty']}</td>
+                            <td style="padding: 10px; text-align: right;">₹{r['Rate']:.2f}</td>
+                            <td style="padding: 10px; text-align: right;">₹{r['Total_Amount']:.2f}</td>
+                        </tr>
+                        """
+                        sr_no += 1
                     
-                    # Clean Printable Receipt Script
+                    # CLEANLY STYLIZED A4 PAGE SCALING TEMPLATE
                     html_code = f"""
                     <html>
                     <head>
                         <title>Invoice_INV_{int(target_id):04d}</title>
+                        <style>
+                            @page {{
+                                size: A4;
+                                margin: 20mm;
+                            }}
+                            body {{
+                                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                color: #333;
+                                margin: 0;
+                                padding: 0;
+                            }}
+                            .invoice-box {{
+                                width: 100%;
+                                max-width: 800px;
+                                margin: auto;
+                                padding: 10px;
+                            }}
+                            .header-table {{
+                                width: 100%;
+                                margin-bottom: 30px;
+                                border-collapse: collapse;
+                            }}
+                            .title-heading {{
+                                color: #e056fd;
+                                font-size: 28px;
+                                margin: 0;
+                                font-weight: bold;
+                            }}
+                            .main-table {{
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-top: 20px;
+                            }}
+                            .main-table th {{
+                                background-color: #f8f9fa;
+                                color: #333;
+                                font-weight: bold;
+                                padding: 12px;
+                                border-bottom: 2px solid #ddd;
+                            }}
+                        </style>
                     </head>
                     <body>
-                        <div id="receipt" style="width:320px; padding:15px; font-family:Arial, sans-serif; border:1px solid #ddd; margin:auto;">
-                            <h2 style="text-align:center; color:#e056fd; margin:0;">🍧 CHUSKI LIVE CANDY</h2>
-                            <p style="text-align:center; font-size:11px; margin:2px 0 10px 0; color:#555;">Pure Joy in Every Frozen Bite!</p>
-                            <hr style="border:none; border-top:1px dashed #777;"/>
-                            <p style="font-size:13px; margin:5px 0;"><b>Invoice No:</b> #INV-{int(target_id):04d}</p>
-                            <p style="font-size:13px; margin:5px 0;"><b>Customer:</b> {saved_cust_name}</p>
-                            <p style="font-size:13px; margin:5px 0;"><b>Date:</b> {inv_date}</p>
-                            <hr style="border:none; border-top:1px dashed #777;"/>
-                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
-                                <tr style="border-bottom:1px solid #333; font-weight:bold;"><td style="padding:5px 0;">Flavor</td><td style="text-align:center;">Qty</td><td style="text-align:right;">Rate</td><td style="text-align:right;">Total</td></tr>
-                                {table_rows}
+                        <div class="invoice-box">
+                            <table class="header-table">
+                                <tr>
+                                    <td>
+                                        <h1 class="title-heading">🍧 CHUSKI LIVE CANDY</h1>
+                                        <span style="font-size: 13px; color: #666;">Pure Joy in Every Frozen Bite!</span>
+                                    </td>
+                                    <td style="text-align: right; font-size: 14px; line-height: 1.6;">
+                                        <strong style="font-size: 18px; color: #333;">TAX INVOICE</strong><br/>
+                                        <b>Invoice No:</b> #INV-{int(target_id):04d}<br/>
+                                        <b>Date:</b> {inv_date}<br/>
+                                        <b>Customer:</b> {saved_cust_name}
+                                    </td>
+                                </tr>
                             </table>
-                            <hr style="border:none; border-top:1px dashed #777;"/>
-                            <h4 style="text-align:right; margin:5px 0;">Total Qty: {inv_qty_total} Pcs</h4>
-                            <h3 style="text-align:right; margin:5px 0; color:#e056fd;">Grand Total: ₹{inv_total:,}</h3>
-                            <hr style="border:none; border-top:1px dashed #777;"/>
-                            <p style="text-align:center; font-size:12px; margin-top:15px;">Thank You! Visit Again! 🙏</p>
+                            
+                            <table class="main-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%; text-align: center;">Sr No.</th>
+                                        <th style="text-align: left;">Item Description</th>
+                                        <th style="width: 12%; text-align: center;">Qty</th>
+                                        <th style="width: 15%; text-align: right;">Rate</th>
+                                        <th style="width: 18%; text-align: right;">Total Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {table_rows}
+                                    <tr style="font-weight: bold; font-size: 15px;">
+                                        <td colspan="2" style="padding: 15px 10px; text-align: right; border-top: 2px solid #333;">TOTAL SUMMARY:</td>
+                                        <td style="padding: 15px 10px; text-align: center; border-top: 2px solid #333;">{inv_qty_total} Pcs</td>
+                                        <td style="border-top: 2px solid #333;"></td>
+                                        <td style="padding: 15px 10px; text-align: right; color: #e056fd; font-size: 16px; border-top: 2px solid #333;">₹{inv_total:,}.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <div style="margin-top: 60px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
+                                <p style="font-size: 14px; color: #555; margin: 0;">Thank you for your business! Visit us again. 🙏</p>
+                            </div>
                         </div>
                         <script>
                             window.onload = function() {{ window.print(); }}
@@ -176,12 +246,10 @@ if choice == "📝 Home Dashboard":
                     </html>
                     """
                     
-                    # ACTIONS BAR
                     act_col1, act_col2 = st.columns(2)
                     with act_col1:
-                        # BULLETPROOF PRINT LINK IN NEW TAB FOR DIRECT PDF SAVE FILE CREATION
                         st.download_button(
-                            label="🖨️ Download / Print PDF",
+                            label="🖨️ Download / Print A4 PDF",
                             data=html_code,
                             file_name=f"Invoice_INV_{int(target_id):04d}.html",
                             mime="text/html",
@@ -199,7 +267,6 @@ if choice == "📝 Home Dashboard":
                             use_container_width=True
                         )
                         
-                    # UTILITIES
                     u_col1, u_col2 = st.columns(2)
                     with u_col1:
                         edit_mode = st.checkbox("✏️ Edit Fields", key=f"edit_mode_{int(target_id)}")
