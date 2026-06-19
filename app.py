@@ -47,7 +47,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (WITH DATE EDIT & MULTI-DOWNLOAD)
+# 📝 HOME DASHBOARD
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -96,13 +96,12 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: INVOICES CARD LIST WITH PDF/CSV CAPABILITIES
+    # RIGHT PANEL: INVOICES CARD LIST
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
-            st.info("No active billing entries found yet. Create your first bill on the left side panel!")
+            st.info("No active billing entries found yet.")
         else:
-            # Global file backup option
             all_csv = inv_df.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Download Complete Database Backup (CSV)", data=all_csv, file_name="all_invoices.csv", mime="text/csv")
             st.markdown("---")
@@ -115,6 +114,7 @@ if choice == "📝 Home Dashboard":
                     continue
                 inv_date = single_inv["Date"].values[0]
                 inv_total = single_inv["Total_Amount"].sum()
+                inv_qty_total = single_inv["Qty"].sum()
                 
                 with st.container(border=True):
                     header_col, action_col = st.columns([2.2, 2.3])
@@ -125,7 +125,6 @@ if choice == "📝 Home Dashboard":
                         st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
                     
                     with action_col:
-                        # Build layout receipt template code
                         table_rows = ""
                         for _, r in single_inv.iterrows():
                             table_rows += f"<tr><td style='padding:8px;'>{r['Candy_Name']}</td><td style='padding:8px;text-align:center;'>{r['Qty']}</td><td style='padding:8px;text-align:right;'>₹{r['Rate']}</td><td style='padding:8px;text-align:right;'>₹{r['Total_Amount']}</td></tr>"
@@ -139,9 +138,9 @@ if choice == "📝 Home Dashboard":
                             <table style="width:100%; border-collapse:collapse; font-size:14px;">
                                 <tr style="background:#f9f9f9; border-bottom:2px solid #ddd;"><th style="text-align:left; padding:8px;">Item</th><th style="padding:8px;">Qty</th><th style="text-align:right; padding:8px;">Rate</th><th style="text-align:right; padding:8px;">Total</th></tr>
                                 {table_rows}
+                                <tr style="border-top: 2px solid #ddd; font-weight: bold;"><td style='padding:8px;'>TOTAL</td><td style='padding:8px;text-align:center;'>{inv_qty_total}</td><td></td><td style='padding:8px;text-align:right;'>₹{inv_total:,}</td></tr>
                             </table>
                             <hr/>
-                            <h3 style="text-align:right; margin-top:10px;">Grand Total: ₹{inv_total:,}</h3>
                             <p style="text-align:center; font-size:12px; margin-top:20px; color:#777;">Thank You! Visit Again! 🙏</p>
                         </div>
                         <script>
@@ -156,7 +155,7 @@ if choice == "📝 Home Dashboard":
                         </script>
                         """
                         
-                        # Button 1: Printable / Save as PDF handler
+                        # PDF/Print Link
                         st.components.v1.html(
                             f"""
                             {html_receipt}
@@ -165,7 +164,6 @@ if choice == "📝 Home Dashboard":
                             height=40
                         )
                         
-                        # Button 2: Single Invoice CSV Data Exporter
                         single_csv = single_inv[["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"]].to_csv(index=False).encode('utf-8')
                         st.download_button(
                             label="📥 Download as CSV File", 
@@ -175,7 +173,6 @@ if choice == "📝 Home Dashboard":
                             key=f"dl_csv_{int(target_id)}"
                         )
                         
-                        # Option Control Toggles
                         btn_col1, btn_col2 = st.columns(2)
                         with btn_col1:
                             edit_mode = st.checkbox("✏️ Edit", key=f"edit_mode_{int(target_id)}")
@@ -189,12 +186,9 @@ if choice == "📝 Home Dashboard":
                                 st.warning(f"Deleted #INV-{int(target_id):04d}")
                                 st.rerun()
                     
-                    # --- EDIT INTERFACE MODIFICATION FOR ITEMS & INVOICE DATE ---
                     if edit_mode:
                         st.markdown("---")
                         st.markdown("#### ⚙️ Edit Fields Panel")
-                        
-                        # NEW FEATURE: EDIT INVOICE DATE INLINE
                         parsed_date = datetime.strptime(inv_date, '%Y-%m-%d').date() if isinstance(inv_date, str) else datetime.now().date()
                         new_inv_date = st.date_input("Modify Invoice Date", value=parsed_date, key=f"edit_date_field_{int(target_id)}")
                         
@@ -209,12 +203,8 @@ if choice == "📝 Home Dashboard":
                             
                             if new_line_qty > 0:
                                 updated_lines.append({
-                                    "Invoice_ID": target_id, 
-                                    "Date": str(new_inv_date), # Saves the updated invoice date
-                                    "Candy_Name": line_row['Candy_Name'],
-                                    "Qty": new_line_qty, 
-                                    "Rate": new_line_rate, 
-                                    "Total_Amount": new_line_qty * new_line_rate
+                                    "Invoice_ID": target_id, "Date": str(new_inv_date), "Candy_Name": line_row['Candy_Name'],
+                                    "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
                                 })
                         
                         if st.button("💾 Apply Invoice Changes", key=f"save_edit_{int(target_id)}", type="primary", use_container_width=True):
@@ -226,10 +216,18 @@ if choice == "📝 Home Dashboard":
                             st.rerun()
                     else:
                         with st.expander("🔍 View Purchased Candy Details"):
-                            st.dataframe(
-                                single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
-                                use_container_width=True
-                            )
+                            # Prepare a nice summary dataframe inside the expander
+                            df_display = single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].copy()
+                            
+                            # CREATE A BEAUTIFUL DYNAMIC TOTAL ROW FOR THE GRID VIEW
+                            total_row = pd.DataFrame([{
+                                "Candy_Name": "TOTAL SUM",
+                                "Qty": inv_qty_total,
+                                "Rate": None,
+                                "Total_Amount": inv_total
+                            }])
+                            df_display = pd.concat([df_display, total_row], ignore_index=True)
+                            st.dataframe(df_display.set_index("Candy_Name"), use_container_width=True)
 
 # ----------------------------------------------------
 # 📊 TAB 2: REPORTS
@@ -237,7 +235,7 @@ if choice == "📝 Home Dashboard":
 elif choice == "📊 Date & Monthly Reports":
     st.header("📊 Sales Reports")
     if inv_df.empty:
-        st.info("No transaction data available yet. Create invoices on the home dashboard first!")
+        st.info("No transaction data available yet.")
     else:
         inv_df['Date'] = pd.to_datetime(inv_df['Date'])
         inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
