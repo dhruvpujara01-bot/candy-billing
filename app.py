@@ -153,4 +153,94 @@ if choice == "📝 Home Dashboard":
                             height=45
                         )
                         
-                        # Security
+                        # Security unlock panel for accidental deletions
+                        confirm_check = st.checkbox("🔓 Unlock Delete", key=f"unlock_{target_id}")
+                        if confirm_check:
+                            if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{target_id}", type="primary", use_container_width=True):
+                                inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
+                                inv_df.to_csv(INV_DB, index=False)
+                                st.warning(f"Invoice #INV-{target_id:04d} deleted.")
+                                st.rerun()
+                    
+                    with st.expander("🔍 View Purchased Candy Details"):
+                        st.dataframe(
+                            single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
+                            use_container_width=True
+                        )
+
+# ----------------------------------------------------
+# 📊 TAB 2: REPORTS
+# ----------------------------------------------------
+elif choice == "📊 Date & Monthly Reports":
+    st.header("📊 Sales Reports")
+    if inv_df.empty:
+        st.info("No transaction data available.")
+    else:
+        inv_df['Date'] = pd.to_datetime(inv_df['Date'])
+        inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
+        inv_df['Only_Date'] = inv_df['Date'].dt.strftime('%Y-%m-%d')
+        
+        tab_daily, tab_monthly = st.tabs(["📆 Specific Date Search", "📅 Monthly Summary"])
+        
+        with tab_daily:
+            search_date = st.date_input("Select Date", datetime.now().date())
+            daily_filtered = inv_df[inv_df['Only_Date'] == str(search_date)]
+            if daily_filtered.empty:
+                st.warning(f"No transactions recorded on {search_date}.")
+            else:
+                st.metric("Daily Revenue Collected", f"₹{daily_filtered['Total_Amount'].sum():,}")
+                daily_summary = daily_filtered.groupby(["Candy_Name", "Rate"]).agg(Quantities_Sold=("Qty", "sum"), Revenue_Earned=("Total_Amount", "sum")).reset_index()
+                st.dataframe(daily_summary.set_index("Candy_Name"), use_container_width=True)
+        
+        with tab_monthly:
+            selected_month = st.selectbox("Select Month", sorted(inv_df['Year_Month'].unique(), reverse=True))
+            monthly_filtered = inv_df[inv_df['Year_Month'] == selected_month]
+            
+            m_col1, m_col2 = st.columns(2)
+            m_col1.metric(f"Total Revenue for {selected_month}", f"₹{monthly_filtered['Total_Amount'].sum():,}")
+            m_col2.metric("Total Invoices Issued", len(monthly_filtered['Invoice_ID'].unique()))
+            
+            monthly_summary = monthly_filtered.groupby(["Candy_Name", "Rate"]).agg(Total_Qty_Sold=("Qty", "sum"), Total_Revenue=("Total_Amount", "sum")).sort_values(by="Total_Qty_Sold", ascending=False).reset_index()
+            st.dataframe(monthly_summary.set_index("Candy_Name"), use_container_width=True)
+
+# ----------------------------------------------------
+# ⚙️ TAB 3: PRICE SETTINGS
+# ----------------------------------------------------
+elif choice == "⚙️ Price Settings":
+    st.header("⚙️ Menu Management Settings")
+    col_edit, col_add = st.columns(2)
+    with col_edit:
+        st.subheader("✏️ Change Existing Candy Prices")
+        selected_candy = st.selectbox("Select Candy to Modify", menu_df["Candy_Name"].tolist())
+        current_price = menu_df.loc[menu_df["Candy_Name"] == selected_candy, "Price"].values[0]
+        new_price = st.number_input(f"New Price for {selected_candy}", min_value=0.0, value=float(current_price))
+        if st.button("Update Price Record"):
+            menu_df.loc[menu_df["Candy_Name"] == selected_candy, "Price"] = new_price
+            menu_df.to_csv(MENU_DB, index=False)
+            st.success("Price updated successfully!")
+            st.rerun()
+    with col_add:
+        st.subheader("➕ Add New Candy Flavor")
+        new_candy_name = st.text_input("Enter New Flavor Name")
+        new_candy_price = st.number_input("Set Price (₹)", min_value=0.0, value=20.0)
+        if st.button("Save New Candy"):
+            if new_candy_name and new_candy_name not in menu_df["Candy_Name"].values:
+                new_row = pd.DataFrame([{"Candy_Name": new_candy_name, "Price": new_candy_price}])
+                pd.concat([menu_df, new_row], ignore_index=True).to_csv(MENU_DB, index=False)
+                st.success("New item added to store!")
+                st.rerun()
+
+# ----------------------------------------------------
+# 📦 TAB 4: STOCK TRACKER
+# ----------------------------------------------------
+elif choice == "📦 Stock Tracker":
+    st.header("📦 Inventory Levels")
+    st.dataframe(stock_df.set_index("Candy_Name"), use_container_width=True)
+    st.subheader("Restock Units")
+    restock_target = st.selectbox("Select Variant to Restock", stock_df["Candy_Name"].tolist())
+    added_amt = st.number_input("Count of Incoming Inventory Units", min_value=1, step=1)
+    if st.button("Confirm Restock Arrival"):
+        stock_df.loc[stock_df["Candy_Name"] == restock_target, "Available_Stock"] += added_amt
+        stock_df.to_csv(STOCK_DB, index=False)
+        st.success("Stock updated!")
+        st.rerun()
