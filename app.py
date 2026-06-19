@@ -155,7 +155,7 @@ if choice == "📝 Home Dashboard":
                         </script>
                         """
                         
-                        # PDF/Print Link
+                        # High visibility PDF print option button
                         st.components.v1.html(
                             f"""
                             {html_receipt}
@@ -216,18 +216,14 @@ if choice == "📝 Home Dashboard":
                             st.rerun()
                     else:
                         with st.expander("🔍 View Purchased Candy Details"):
-                            # Prepare a nice summary dataframe inside the expander
                             df_display = single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].copy()
-                            
-                            # CREATE A BEAUTIFUL DYNAMIC TOTAL ROW FOR THE GRID VIEW
-                            total_row = pd.DataFrame([{
-                                "Candy_Name": "TOTAL SUM",
-                                "Qty": inv_qty_total,
-                                "Rate": None,
-                                "Total_Amount": inv_total
-                            }])
-                            df_display = pd.concat([df_display, total_row], ignore_index=True)
                             st.dataframe(df_display.set_index("Candy_Name"), use_container_width=True)
+                            
+                            # --- HIGHLIGHTED TOTAL VALUES DIRECTLY UNDERNEATH DATA TABLE ---
+                            st.markdown(f"### 📋 Invoice Summary Details:")
+                            sum_col1, sum_col2 = st.columns(2)
+                            sum_col1.markdown(f"**🔢 Total Items Sold:** `{inv_qty_total} Pcs`")
+                            sum_col2.markdown(f"**💰 Grand Total Bill Amount:** `₹{inv_total:,}`")
 
 # ----------------------------------------------------
 # 📊 TAB 2: REPORTS
