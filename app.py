@@ -47,7 +47,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (WITH INTEGRATED INLINE EDIT & SAFE DELETE)
+# 📝 HOME DASHBOARD (WITH DATE EDIT & MULTI-DOWNLOAD)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -59,7 +59,7 @@ if choice == "📝 Home Dashboard":
     
     col1, col2 = st.columns([4, 5])
     
-    # LEFT PANEL: INVOICE GENERATOR
+    # LEFT PANEL: NEW INVOICE MAKER
     with col1:
         st.subheader(f"🆕 Current Invoice: #INV-{next_id:04d}")
         date_sel = st.date_input("Billing Date", datetime.now().date(), key=f"date_{st.session_state['form_reset_token']}")
@@ -96,14 +96,15 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: RECORD LISTINGS WITH INLINE ACTIONS
+    # RIGHT PANEL: INVOICES CARD LIST WITH PDF/CSV CAPABILITIES
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
             st.info("No active billing entries found yet. Create your first bill on the left side panel!")
         else:
-            csv_data = inv_df.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Download Database Backup (CSV)", data=csv_data, file_name="invoice_history.csv", mime="text/csv")
+            # Global file backup option
+            all_csv = inv_df.to_csv(index=False).encode('utf-8')
+            st.download_button(label="📥 Download Complete Database Backup (CSV)", data=all_csv, file_name="all_invoices.csv", mime="text/csv")
             st.markdown("---")
             
             unique_saved_ids = sorted(inv_df["Invoice_ID"].dropna().unique(), reverse=True)
@@ -116,14 +117,15 @@ if choice == "📝 Home Dashboard":
                 inv_total = single_inv["Total_Amount"].sum()
                 
                 with st.container(border=True):
-                    header_col, action_col = st.columns([2.5, 2])
+                    header_col, action_col = st.columns([2.2, 2.3])
                     
                     with header_col:
-                        st.markdown(f"**🧾 Invoice #INV-{int(target_id):04d}** | 📅 *{inv_date}*")
+                        st.markdown(f"**🧾 Invoice #INV-{int(target_id):04d}**")
+                        st.markdown(f"📅 *Date: {inv_date}*")
                         st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
                     
                     with action_col:
-                        # Print Script Template
+                        # Build layout receipt template code
                         table_rows = ""
                         for _, r in single_inv.iterrows():
                             table_rows += f"<tr><td style='padding:8px;'>{r['Candy_Name']}</td><td style='padding:8px;text-align:center;'>{r['Qty']}</td><td style='padding:8px;text-align:right;'>₹{r['Rate']}</td><td style='padding:8px;text-align:right;'>₹{r['Total_Amount']}</td></tr>"
@@ -154,35 +156,51 @@ if choice == "📝 Home Dashboard":
                         </script>
                         """
                         
+                        # Button 1: Printable / Save as PDF handler
                         st.components.v1.html(
                             f"""
                             {html_receipt}
-                            <button onclick="printInvoice_{int(target_id)}()" style="width:100%; background-color:#2ed573; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:14px;">🖨️ Print & Save PDF</button>
+                            <button onclick="printInvoice_{int(target_id)}()" style="width:100%; background-color:#2ed573; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:13px;">🖨️ Download / Print PDF</button>
                             """,
-                            height=45
+                            height=40
                         )
                         
-                        # --- MODIFICATION INTERFACE CONTROLS ---
+                        # Button 2: Single Invoice CSV Data Exporter
+                        single_csv = single_inv[["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"]].to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Download as CSV File", 
+                            data=single_csv, 
+                            file_name=f"Invoice_INV_{int(target_id):04d}.csv", 
+                            mime="text/csv",
+                            key=f"dl_csv_{int(target_id)}"
+                        )
+                        
+                        # Option Control Toggles
                         btn_col1, btn_col2 = st.columns(2)
                         with btn_col1:
                             edit_mode = st.checkbox("✏️ Edit", key=f"edit_mode_{int(target_id)}")
                         with btn_col2:
-                            confirm_check = st.checkbox("🔓 Unlock Del", key=f"unlock_{int(target_id)}")
+                            confirm_check = st.checkbox("🔓 Del", key=f"unlock_{int(target_id)}")
                         
-                        # Handle Deletion Execution
                         if confirm_check:
                             if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{int(target_id)}", type="primary", use_container_width=True):
                                 inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
                                 inv_df.to_csv(INV_DB, index=False)
-                                st.warning(f"Invoice #INV-{int(target_id):04d} deleted.")
+                                st.warning(f"Deleted #INV-{int(target_id):04d}")
                                 st.rerun()
                     
-                    # --- INLINE EDIT PANEL DROP EXPANSION ---
+                    # --- EDIT INTERFACE MODIFICATION FOR ITEMS & INVOICE DATE ---
                     if edit_mode:
-                        st.markdown("#### ✏️ Update Invoice Line Values")
+                        st.markdown("---")
+                        st.markdown("#### ⚙️ Edit Fields Panel")
+                        
+                        # NEW FEATURE: EDIT INVOICE DATE INLINE
+                        parsed_date = datetime.strptime(inv_date, '%Y-%m-%d').date() if isinstance(inv_date, str) else datetime.now().date()
+                        new_inv_date = st.date_input("Modify Invoice Date", value=parsed_date, key=f"edit_date_field_{int(target_id)}")
+                        
                         updated_lines = []
                         for line_idx, line_row in single_inv.iterrows():
-                            st.write(f"**Item: {line_row['Candy_Name']}**")
+                            st.write(f"🔹 *{line_row['Candy_Name']}*")
                             c_qty, c_rate = st.columns(2)
                             with c_qty:
                                 new_line_qty = st.number_input("Qty", min_value=0, value=int(line_row['Qty']), key=f"eqty_{line_idx}")
@@ -191,12 +209,15 @@ if choice == "📝 Home Dashboard":
                             
                             if new_line_qty > 0:
                                 updated_lines.append({
-                                    "Invoice_ID": target_id, "Date": line_row['Date'], "Candy_Name": line_row['Candy_Name'],
-                                    "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
+                                    "Invoice_ID": target_id, 
+                                    "Date": str(new_inv_date), # Saves the updated invoice date
+                                    "Candy_Name": line_row['Candy_Name'],
+                                    "Qty": new_line_qty, 
+                                    "Rate": new_line_rate, 
+                                    "Total_Amount": new_line_qty * new_line_rate
                                 })
                         
                         if st.button("💾 Apply Invoice Changes", key=f"save_edit_{int(target_id)}", type="primary", use_container_width=True):
-                            # Remove old copy and append edited version
                             inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
                             if updated_lines:
                                 inv_df = pd.concat([inv_df, pd.DataFrame(updated_lines)], ignore_index=True)
