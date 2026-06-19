@@ -6,12 +6,12 @@ import os
 st.set_page_config(page_title="Chuski Live Candy", layout="wide")
 st.title("🍧 Chuski Live Candy Management System")
 
-# Files to keep database records securely
+# --- FILE PATHS FOR DATASTORAGE ---
 INV_DB = "invoice_history.csv"
 STOCK_DB = "stock_inventory.csv"
 MENU_DB = "candy_menu.csv"
 
-# --- INITIALIZE DATABASE FILES ---
+# --- INITIALIZE CORES ---
 if not os.path.exists(MENU_DB):
     initial_menu = {
         "Orange Ice Candy": 5.0, "Kala Khatta Ice Candy": 5.0, "Kachi Keri Ice Candy": 5.0,
@@ -34,20 +34,19 @@ if not os.path.exists(STOCK_DB):
     pd.DataFrame([{"Candy_Name": name, "Available_Stock": 500} for name in MENU.keys()]).to_csv(STOCK_DB, index=False)
 
 stock_df = pd.read_csv(STOCK_DB)
+inv_df = pd.read_csv(INV_DB)
 
 # --- NAVIGATION MENU ---
-choice = st.sidebar.radio("Go To", ["📝 Home & Create Invoice", "📊 Date-Wise & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
+choice = st.sidebar.radio("Go To", ["📝 Home & Create Invoice", "✏️ Edit Past Invoices", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 TAB 1: HOME & CREATE INVOICE (SHOWS CREATED INVOICES)
+# 📝 TAB 1: HOME & CREATE INVOICE
 # ----------------------------------------------------
 if choice == "📝 Home & Create Invoice":
-    st.header("🛒 Billing & Saved Invoices Dashboard")
-    inv_df = pd.read_csv(INV_DB)
+    st.header("🛒 Billing Dashboard")
     next_id = 1 if inv_df.empty else int(inv_df["Invoice_ID"].max()) + 1
     
     col1, col2 = st.columns([1, 1])
-    
     with col1:
         st.subheader(f"🆕 Create Invoice #INV-{next_id:04d}")
         date_sel = st.date_input("Billing Date", datetime.now().date())
@@ -78,28 +77,72 @@ if choice == "📝 Home & Create Invoice":
                 st.rerun()
 
     with col2:
-        st.subheader("📋 Saved Invoices History (Database)")
+        st.subheader("📋 Saved Invoices History")
         if inv_df.empty:
-            st.info("No saved invoices found yet. Create one on the left!")
+            st.info("No saved invoices found yet.")
         else:
-            # Download button so you can download your invoice data to Excel/CSV anytime!
             csv_data = inv_df.to_csv(index=False).encode('utf-8')
-            st.download_button(label="📥 Download All Invoices as CSV file", data=csv_data, file_name="invoice_history_backup.csv", mime="text/csv")
-            
-            # Grouping to show distinct invoices cleanly
-            display_df = inv_df.copy()
-            display_df = display_df.sort_values(by="Invoice_ID", ascending=False)
-            st.dataframe(display_df, use_container_width=True, height=600)
+            st.download_button(label="📥 Download All Invoices (Excel/CSV)", data=csv_data, file_name="invoice_history.csv", mime="text/csv")
+            st.dataframe(inv_df.sort_values(by="Invoice_ID", ascending=False), use_container_width=True, height=600)
 
 # ----------------------------------------------------
-# 📊 TAB 2: DATE-WISE & MONTHLY REPORTS
+# ✏️ NEW TAB 2: EDIT PAST INVOICES (MODIFY QTY OR RATE)
 # ----------------------------------------------------
-elif choice == "📊 Date-Wise & Monthly Reports":
-    st.header("📊 Detailed Sales Analysis")
-    inv_df = pd.read_csv(INV_DB)
+elif choice == "✏️ Edit Past Invoices":
+    st.header("✏️ Modify / Change Existing Invoices")
     
     if inv_df.empty:
-        st.info("No sales transactions available to generate reports.")
+        st.info("No invoices exist yet to modify.")
+    else:
+        unique_inv_ids = sorted(inv_df["Invoice_ID"].unique(), reverse=True)
+        selected_inv = st.selectbox("Select Invoice ID to Edit", unique_inv_ids)
+        
+        # Filter for rows belonging to that invoice
+        inv_rows = inv_df[inv_df["Invoice_ID"] == selected_inv].copy()
+        
+        st.write("### Current items in this invoice:")
+        
+        # Dynamic form fields to edit Rate and Qty for items in this invoice
+        updated_rows = []
+        for index, row in inv_rows.iterrows():
+            st.markdown(f"**🔹 {row['Candy_Name']}**")
+            c1, c2 = st.columns(2)
+            with c1:
+                edit_qty = st.number_input(f"Change Quantity", min_value=0, value=int(row['Qty']), key=f"edit_qty_{index}")
+            with c2:
+                edit_rate = st.number_input(f"Change Rate (₹)", min_value=0.0, value=float(row['Rate']), key=f"edit_rate_{index}")
+            
+            if edit_qty > 0:  # If qty is set to 0, it removes it from the bill
+                updated_rows.append({
+                    "Invoice_ID": selected_inv,
+                    "Date": row['Date'],
+                    "Candy_Name": row['Candy_Name'],
+                    "Qty": edit_qty,
+                    "Rate": edit_rate,
+                    "Total_Amount": edit_qty * edit_rate
+                })
+        
+        if st.button("💾 Save Invoice Corrections", type="primary"):
+            # 1. Remove the old records of this invoice ID completely
+            inv_df = inv_df[inv_df["Invoice_ID"] != selected_inv]
+            
+            # 2. Add the modified records
+            if updated_rows:
+                new_edited_df = pd.DataFrame(updated_rows)
+                inv_df = pd.concat([inv_df, new_edited_df], ignore_index=True)
+            
+            inv_df.to_csv(INV_DB, index=False)
+            st.success(f"Invoice #INV-{selected_inv:04d} has been updated successfully!")
+            st.rerun()
+
+# ----------------------------------------------------
+# 📊 TAB 3: DATE & MONTHLY REPORTS (WITH RATES INCLUDED)
+# ----------------------------------------------------
+elif choice == "📊 Date & Monthly Reports":
+    st.header("📊 Sales Reports")
+    
+    if inv_df.empty:
+        st.info("No transaction data available.")
     else:
         inv_df['Date'] = pd.to_datetime(inv_df['Date'])
         inv_df['Year_Month'] = inv_df['Date'].dt.strftime('%Y-%m')
@@ -108,44 +151,42 @@ elif choice == "📊 Date-Wise & Monthly Reports":
         tab_daily, tab_monthly = st.tabs(["📆 Specific Date Search", "📅 Monthly Summary"])
         
         with tab_daily:
-            st.subheader("Check Candy Sales For a Particular Date")
-            search_date = st.date_input("Select Date to View Sales", datetime.now().date())
-            search_date_str = str(search_date)
-            
-            daily_filtered = inv_df[inv_df['Only_Date'] == search_date_str]
+            st.subheader("Daily Sales Checker")
+            search_date = st.date_input("Select Date", datetime.now().date())
+            daily_filtered = inv_df[inv_df['Only_Date'] == str(search_date)]
             
             if daily_filtered.empty:
-                st.warning(f"No candies were sold on {search_date_str}.")
+                st.warning(f"No transactions recorded on {search_date}.")
             else:
-                st.metric("Total Revenue for Today", f"₹{daily_filtered['Total_Amount'].sum():,}")
-                st.markdown("#### Candies Sold on This Date:")
-                daily_summary = daily_filtered.groupby("Candy_Name").agg(
+                st.metric("Daily Revenue Collected", f"₹{daily_filtered['Total_Amount'].sum():,}")
+                # Groups by Candy and shows current Rate and total performance
+                daily_summary = daily_filtered.groupby(["Candy_Name", "Rate"]).agg(
                     Quantities_Sold=("Qty", "sum"),
                     Revenue_Earned=("Total_Amount", "sum")
-                )
-                st.dataframe(daily_summary, use_container_width=True)
+                ).reset_index()
+                st.dataframe(daily_summary.set_index("Candy_Name"), use_container_width=True)
         
         with tab_monthly:
             st.subheader("Monthly Performance Breakdowns")
             selected_month = st.selectbox("Select Month", sorted(inv_df['Year_Month'].unique(), reverse=True))
-            
             monthly_filtered = inv_df[inv_df['Year_Month'] == selected_month]
             
             m_col1, m_col2 = st.columns(2)
             m_col1.metric(f"Total Revenue for {selected_month}", f"₹{monthly_filtered['Total_Amount'].sum():,}")
             m_col2.metric("Total Invoices Issued", len(monthly_filtered['Invoice_ID'].unique()))
             
-            st.markdown("#### Candy Item Breakdown For This Month:")
-            monthly_summary = monthly_filtered.groupby("Candy_Name").agg(
+            st.markdown("#### Candy Item Breakdown For This Month (Includes Base Rates):")
+            # GROUPS CANDY AND ADDS INDIVIDUAL RATES TO MONTHLY VIEWS
+            monthly_summary = monthly_filtered.groupby(["Candy_Name", "Rate"]).agg(
                 Total_Qty_Sold=("Qty", "sum"),
                 Total_Revenue=("Total_Amount", "sum")
-            ).sort_values(by="Total_Qty_Sold", ascending=False)
+            ).sort_values(by="Total_Qty_Sold", ascending=False).reset_index()
             
-            st.dataframe(monthly_summary, use_container_width=True)
-            st.bar_chart(monthly_summary["Total_Revenue"])
+            st.dataframe(monthly_summary.set_index("Candy_Name"), use_container_width=True)
+            st.bar_chart(monthly_summary.set_index("Candy_Name")["Total_Revenue"])
 
 # ----------------------------------------------------
-# ⚙️ TAB 3: PRICE SETTINGS
+# ⚙️ TAB 4: PRICE SETTINGS
 # ----------------------------------------------------
 elif choice == "⚙️ Price Settings":
     st.header("⚙️ Menu Management Settings")
@@ -172,7 +213,7 @@ elif choice == "⚙️ Price Settings":
                 st.rerun()
 
 # ----------------------------------------------------
-# 📦 TAB 4: STOCK TRACKER
+# 📦 TAB 5: STOCK TRACKER
 # ----------------------------------------------------
 elif choice == "📦 Stock Tracker":
     st.header("📦 Inventory Levels")
