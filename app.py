@@ -25,7 +25,7 @@ if not os.path.exists(MENU_DB):
     pd.DataFrame(list(initial_menu.items()), columns=["Candy_Name", "Price"]).to_csv(MENU_DB, index=False)
 
 if not os.path.exists(INV_DB):
-    pd.DataFrame(columns=["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"]).to_csv(INV_DB, index=False)
+    pd.DataFrame(columns=["Invoice_ID", "Date", "Customer_Name", "Candy_Name", "Qty", "Rate", "Total_Amount"]).to_csv(INV_DB, index=False)
 
 menu_df = pd.read_csv(MENU_DB)
 MENU = menu_df.set_index('Candy_Name')['Price'].to_dict()
@@ -37,8 +37,10 @@ stock_df = pd.read_csv(STOCK_DB)
 
 try:
     inv_df = pd.read_csv(INV_DB)
+    if "Customer_Name" not in inv_df.columns:
+        inv_df["Customer_Name"] = "Walk-in Customer"
 except Exception:
-    inv_df = pd.DataFrame(columns=["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"])
+    inv_df = pd.DataFrame(columns=["Invoice_ID", "Date", "Customer_Name", "Candy_Name", "Qty", "Rate", "Total_Amount"])
 
 if "form_reset_token" not in st.session_state:
     st.session_state["form_reset_token"] = 0
@@ -47,7 +49,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD
+# 📝 HOME DASHBOARD (FIXED PRINT & TOTALS YIELD)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -62,6 +64,9 @@ if choice == "📝 Home Dashboard":
     # LEFT PANEL: NEW INVOICE MAKER
     with col1:
         st.subheader(f"🆕 Current Invoice: #INV-{next_id:04d}")
+        
+        # NEW CUSTOMER NAME ENTRY FIELD
+        cust_name = st.text_input("👤 Enter Customer Name", value="Walk-in Customer", key=f"cust_{st.session_state['form_reset_token']}")
         date_sel = st.date_input("Billing Date", datetime.now().date(), key=f"date_{st.session_state['form_reset_token']}")
         
         cart = []
@@ -86,7 +91,15 @@ if choice == "📝 Home Dashboard":
             if st.button("💾 SAVE INVOICE RECORDS", type="primary", use_container_width=True):
                 for item in cart:
                     stock_df.loc[stock_df["Candy_Name"] == item["Candy_Name"], "Available_Stock"] -= item["Qty"]
-                    new_row = pd.DataFrame([{"Invoice_ID": next_id, "Date": str(date_sel), "Candy_Name": item["Candy_Name"], "Qty": item["Qty"], "Rate": item["Rate"], "Total_Amount": item["Total_Amount"]}])
+                    new_row = pd.DataFrame([{
+                        "Invoice_ID": next_id, 
+                        "Date": str(date_sel), 
+                        "Customer_Name": cust_name if cust_name.strip() != "" else "Walk-in Customer",
+                        "Candy_Name": item["Candy_Name"], 
+                        "Qty": item["Qty"], 
+                        "Rate": item["Rate"], 
+                        "Total_Amount": item["Total_Amount"]
+                    }])
                     inv_df = pd.concat([inv_df, new_row], ignore_index=True)
                 
                 stock_df.to_csv(STOCK_DB, index=False)
@@ -96,7 +109,7 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: INVOICES CARD LIST
+    # RIGHT PANEL: INVOICES CARD LIST WITH FIXED PDF VIEW & VISIBLE TOTALS
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
@@ -116,79 +129,94 @@ if choice == "📝 Home Dashboard":
                 inv_total = single_inv["Total_Amount"].sum()
                 inv_qty_total = single_inv["Qty"].sum()
                 
+                # Load saved customer name safely
+                saved_cust_name = single_inv["Customer_Name"].values[0] if "Customer_Name" in single_inv.columns else "Walk-in Customer"
+                
                 with st.container(border=True):
-                    header_col, action_col = st.columns([2.2, 2.3])
+                    # VISIBLE TOP SUMMARY WITH TOTAL DETAILS WRITTEN OUT
+                    st.markdown(f"### 🧾 Invoice #INV-{int(target_id):04d}")
+                    st.write(f"👤 **Customer Name:** {saved_cust_name}")
+                    st.write(f"📅 **Date:** {inv_date} | 🔢 **Total Qty Sold:** {inv_qty_total} Pcs")
+                    st.markdown(f"💰 **Grand Total Bill: ₹{inv_total:,}**")
                     
-                    with header_col:
-                        st.markdown(f"**🧾 Invoice #INV-{int(target_id):04d}**")
-                        st.markdown(f"📅 *Date: {inv_date}*")
-                        st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
+                    # Construct HTML text slip manually
+                    table_rows = ""
+                    for _, r in single_inv.iterrows():
+                        table_rows += f"<tr><td style='padding:8px; border-bottom:1px solid #eee;'>{r['Candy_Name']}</td><td style='padding:8px; text-align:center; border-bottom:1px solid #eee;'>{r['Qty']}</td><td style='padding:8px; text-align:right; border-bottom:1px solid #eee;'>₹{r['Rate']}</td><td style='padding:8px; text-align:right; border-bottom:1px solid #eee;'>₹{r['Total_Amount']}</td></tr>"
                     
-                    with action_col:
-                        table_rows = ""
-                        for _, r in single_inv.iterrows():
-                            table_rows += f"<tr><td style='padding:8px;'>{r['Candy_Name']}</td><td style='padding:8px;text-align:center;'>{r['Qty']}</td><td style='padding:8px;text-align:right;'>₹{r['Rate']}</td><td style='padding:8px;text-align:right;'>₹{r['Total_Amount']}</td></tr>"
-                        
-                        html_receipt = f"""
-                        <div id="print-area-{int(target_id)}" style="padding:20px; font-family:Arial, sans-serif; max-width:400px; border:1px solid #eee; margin:auto;">
-                            <h2 style="text-align:center; color:#e056fd; margin-bottom:2px;">🍧 CHUSKI LIVE CANDY</h2>
-                            <p style="text-align:center; font-size:12px; margin-top:0;">Pure Joy in Every Frozen Bite!</p>
-                            <hr/>
-                            <p><b>Invoice No:</b> #INV-{int(target_id):04d}<br/><b>Date:</b> {inv_date}</p>
-                            <table style="width:100%; border-collapse:collapse; font-size:14px;">
-                                <tr style="background:#f9f9f9; border-bottom:2px solid #ddd;"><th style="text-align:left; padding:8px;">Item</th><th style="padding:8px;">Qty</th><th style="text-align:right; padding:8px;">Rate</th><th style="text-align:right; padding:8px;">Total</th></tr>
+                    # Clean Printable Receipt Script
+                    html_code = f"""
+                    <html>
+                    <head>
+                        <title>Invoice_INV_{int(target_id):04d}</title>
+                    </head>
+                    <body>
+                        <div id="receipt" style="width:320px; padding:15px; font-family:Arial, sans-serif; border:1px solid #ddd; margin:auto;">
+                            <h2 style="text-align:center; color:#e056fd; margin:0;">🍧 CHUSKI LIVE CANDY</h2>
+                            <p style="text-align:center; font-size:11px; margin:2px 0 10px 0; color:#555;">Pure Joy in Every Frozen Bite!</p>
+                            <hr style="border:none; border-top:1px dashed #777;"/>
+                            <p style="font-size:13px; margin:5px 0;"><b>Invoice No:</b> #INV-{int(target_id):04d}</p>
+                            <p style="font-size:13px; margin:5px 0;"><b>Customer:</b> {saved_cust_name}</p>
+                            <p style="font-size:13px; margin:5px 0;"><b>Date:</b> {inv_date}</p>
+                            <hr style="border:none; border-top:1px dashed #777;"/>
+                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                <tr style="border-bottom:1px solid #333; font-weight:bold;"><td style="padding:5px 0;">Flavor</td><td style="text-align:center;">Qty</td><td style="text-align:right;">Rate</td><td style="text-align:right;">Total</td></tr>
                                 {table_rows}
-                                <tr style="border-top: 2px solid #ddd; font-weight: bold;"><td style='padding:8px;'>TOTAL</td><td style='padding:8px;text-align:center;'>{inv_qty_total}</td><td></td><td style='padding:8px;text-align:right;'>₹{inv_total:,}</td></tr>
                             </table>
-                            <hr/>
-                            <p style="text-align:center; font-size:12px; margin-top:20px; color:#777;">Thank You! Visit Again! 🙏</p>
+                            <hr style="border:none; border-top:1px dashed #777;"/>
+                            <h4 style="text-align:right; margin:5px 0;">Total Qty: {inv_qty_total} Pcs</h4>
+                            <h3 style="text-align:right; margin:5px 0; color:#e056fd;">Grand Total: ₹{inv_total:,}</h3>
+                            <hr style="border:none; border-top:1px dashed #777;"/>
+                            <p style="text-align:center; font-size:12px; margin-top:15px;">Thank You! Visit Again! 🙏</p>
                         </div>
                         <script>
-                            function printInvoice_{int(target_id)}() {{
-                                var printContents = document.getElementById('print-area-{int(target_id)}').innerHTML;
-                                var originalContents = document.body.innerHTML;
-                                document.body.innerHTML = printContents;
-                                window.print();
-                                document.body.innerHTML = originalContents;
-                                window.location.reload();
-                            }}
+                            window.onload = function() {{ window.print(); }}
                         </script>
-                        """
-                        
-                        # High visibility PDF print option button
-                        st.components.v1.html(
-                            f"""
-                            {html_receipt}
-                            <button onclick="printInvoice_{int(target_id)}()" style="width:100%; background-color:#2ed573; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:13px;">🖨️ Download / Print PDF</button>
-                            """,
-                            height=40
-                        )
-                        
-                        single_csv = single_inv[["Invoice_ID", "Date", "Candy_Name", "Qty", "Rate", "Total_Amount"]].to_csv(index=False).encode('utf-8')
+                    </body>
+                    </html>
+                    """
+                    
+                    # ACTIONS BAR
+                    act_col1, act_col2 = st.columns(2)
+                    with act_col1:
+                        # BULLETPROOF PRINT LINK IN NEW TAB FOR DIRECT PDF SAVE FILE CREATION
                         st.download_button(
-                            label="📥 Download as CSV File", 
+                            label="🖨️ Download / Print PDF",
+                            data=html_code,
+                            file_name=f"Invoice_INV_{int(target_id):04d}.html",
+                            mime="text/html",
+                            key=f"print_html_{int(target_id)}",
+                            use_container_width=True
+                        )
+                    with act_col2:
+                        single_csv = single_inv.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Download as CSV Data", 
                             data=single_csv, 
                             file_name=f"Invoice_INV_{int(target_id):04d}.csv", 
                             mime="text/csv",
-                            key=f"dl_csv_{int(target_id)}"
+                            key=f"dl_csv_{int(target_id)}",
+                            use_container_width=True
                         )
                         
-                        btn_col1, btn_col2 = st.columns(2)
-                        with btn_col1:
-                            edit_mode = st.checkbox("✏️ Edit", key=f"edit_mode_{int(target_id)}")
-                        with btn_col2:
-                            confirm_check = st.checkbox("🔓 Del", key=f"unlock_{int(target_id)}")
-                        
-                        if confirm_check:
-                            if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{int(target_id)}", type="primary", use_container_width=True):
-                                inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
-                                inv_df.to_csv(INV_DB, index=False)
-                                st.warning(f"Deleted #INV-{int(target_id):04d}")
-                                st.rerun()
+                    # UTILITIES
+                    u_col1, u_col2 = st.columns(2)
+                    with u_col1:
+                        edit_mode = st.checkbox("✏️ Edit Fields", key=f"edit_mode_{int(target_id)}")
+                    with u_col2:
+                        confirm_check = st.checkbox("🔓 Unlock Del", key=f"unlock_{int(target_id)}")
+                    
+                    if confirm_check:
+                        if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{int(target_id)}", type="primary", use_container_width=True):
+                            inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
+                            inv_df.to_csv(INV_DB, index=False)
+                            st.warning(f"Deleted #INV-{int(target_id):04d}")
+                            st.rerun()
                     
                     if edit_mode:
                         st.markdown("---")
                         st.markdown("#### ⚙️ Edit Fields Panel")
+                        new_cust_field = st.text_input("Modify Customer Name", value=saved_cust_name, key=f"edit_cust_{int(target_id)}")
                         parsed_date = datetime.strptime(inv_date, '%Y-%m-%d').date() if isinstance(inv_date, str) else datetime.now().date()
                         new_inv_date = st.date_input("Modify Invoice Date", value=parsed_date, key=f"edit_date_field_{int(target_id)}")
                         
@@ -203,7 +231,10 @@ if choice == "📝 Home Dashboard":
                             
                             if new_line_qty > 0:
                                 updated_lines.append({
-                                    "Invoice_ID": target_id, "Date": str(new_inv_date), "Candy_Name": line_row['Candy_Name'],
+                                    "Invoice_ID": target_id, 
+                                    "Date": str(new_inv_date), 
+                                    "Customer_Name": new_cust_field,
+                                    "Candy_Name": line_row['Candy_Name'],
                                     "Qty": new_line_qty, "Rate": new_line_rate, "Total_Amount": new_line_qty * new_line_rate
                                 })
                         
@@ -215,15 +246,8 @@ if choice == "📝 Home Dashboard":
                             st.success("Invoice lines adjusted safely!")
                             st.rerun()
                     else:
-                        with st.expander("🔍 View Purchased Candy Details"):
-                            df_display = single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].copy()
-                            st.dataframe(df_display.set_index("Candy_Name"), use_container_width=True)
-                            
-                            # --- HIGHLIGHTED TOTAL VALUES DIRECTLY UNDERNEATH DATA TABLE ---
-                            st.markdown(f"### 📋 Invoice Summary Details:")
-                            sum_col1, sum_col2 = st.columns(2)
-                            sum_col1.markdown(f"**🔢 Total Items Sold:** `{inv_qty_total} Pcs`")
-                            sum_col2.markdown(f"**💰 Grand Total Bill Amount:** `₹{inv_total:,}`")
+                        with st.expander("🔍 View Purchased Candy Details Table Grid"):
+                            st.dataframe(single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), use_container_width=True)
 
 # ----------------------------------------------------
 # 📊 TAB 2: REPORTS
