@@ -36,7 +36,6 @@ if not os.path.exists(STOCK_DB):
 stock_df = pd.read_csv(STOCK_DB)
 inv_df = pd.read_csv(INV_DB)
 
-# Use session state to handle clean page reruns and lock dynamic incremental counters
 if "form_reset_token" not in st.session_state:
     st.session_state["form_reset_token"] = 0
 
@@ -44,14 +43,12 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD (DYNAMIC INLINE RECORDS LISTING)
+# 📝 HOME DASHBOARD (WITH ACCIDENTAL DELETE PROTECTION)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
     
-    # Dynamically find the next Invoice ID based on data
     next_id = 1 if inv_df.empty else int(inv_df["Invoice_ID"].max()) + 1
-    
     col1, col2 = st.columns([4, 5])
     
     # LEFT PANEL: INVOICE GENERATOR
@@ -65,7 +62,6 @@ if choice == "📝 Home Dashboard":
             match = stock_df[stock_df["Candy_Name"] == candy]
             curr_stock = match["Available_Stock"].values[0] if not match.empty else 0
             
-            # Form resets input counters back to 0 immediately upon form token revision
             qty = st.number_input(
                 f"{candy} (₹{price}) | Stock: {curr_stock}", 
                 min_value=0, step=1, 
@@ -89,12 +85,10 @@ if choice == "📝 Home Dashboard":
                 inv_df.to_csv(INV_DB, index=False)
                 
                 st.success(f"🎉 Invoice #INV-{next_id:04d} saved successfully!")
-                
-                # Increment token to reset the input quantities interface and update invoice number instantly
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: SPREADSHEET LIVE ENTRIES ROW WATCHER WITH DIRECT CORRESPONDING ACTION BUTTONS
+    # RIGHT PANEL: SPREADSHEET VIEWER WITH CONFIRMATION SAFETY ON DELETION
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
@@ -104,7 +98,6 @@ if choice == "📝 Home Dashboard":
             st.download_button(label="📥 Download Database Backup File (CSV)", data=csv_data, file_name="invoice_history.csv", mime="text/csv")
             st.markdown("---")
             
-            # Group records to display cleanly inside explicit interactive inline boxes
             unique_saved_ids = sorted(inv_df["Invoice_ID"].unique(), reverse=True)
             
             for target_id in unique_saved_ids:
@@ -112,23 +105,26 @@ if choice == "📝 Home Dashboard":
                 inv_date = single_inv["Date"].values[0]
                 inv_total = single_inv["Total_Amount"].sum()
                 
-                # Creates an explicit isolated border container block for each individual invoice group
                 with st.container(border=True):
-                    header_col, action_col = st.columns([3, 1])
+                    header_col, action_col = st.columns([3, 1.5])
                     
                     with header_col:
                         st.markdown(f"**🧾 Invoice #INV-{target_id:04d}** | 📅 *{inv_date}*")
                         st.markdown(f"💸 **Total Bill: ₹{inv_total:,}**")
                     
                     with action_col:
-                        # DEDICATED INDIVIDUAL DELETION TRIGGER CORRESPONDING DIRECTLY TO THIS ROW LOG
-                        if st.button("❌ Delete", key=f"del_btn_{target_id}", type="secondary", use_container_width=True):
-                            inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
-                            inv_df.to_csv(INV_DB, index=False)
-                            st.warning(f"Invoice #INV-{target_id:04d} removed.")
-                            st.rerun()
+                        # Safety Mechanism: Checkbox pops open before deletion can be processed
+                        confirm_check = st.checkbox("🔓 Unlock Delete", key=f"unlock_{target_id}")
+                        
+                        if confirm_check:
+                            if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{target_id}", type="primary", use_container_width=True):
+                                inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
+                                inv_df.to_csv(INV_DB, index=False)
+                                st.warning(f"Invoice #INV-{target_id:04d} deleted completely.")
+                                st.rerun()
+                        else:
+                            st.button("❌ Delete Locked", key=f"disabled_btn_{target_id}", disabled=True, use_container_width=True)
                     
-                    # Collapsible itemized view breakdown inside the box
                     with st.expander("🔍 View Purchased Candy Details"):
                         st.dataframe(
                             single_inv[["Candy_Name", "Qty", "Rate", "Total_Amount"]].set_index("Candy_Name"), 
