@@ -49,7 +49,7 @@ if "form_reset_token" not in st.session_state:
 choice = st.sidebar.radio("Go To", ["📝 Home Dashboard", "📊 Date & Monthly Reports", "⚙️ Price Settings", "📦 Stock Tracker"])
 
 # ----------------------------------------------------
-# 📝 HOME DASHBOARD
+# 📝 HOME DASHBOARD (FIXED NUMBER LOGIC FOR PRINT)
 # ----------------------------------------------------
 if choice == "📝 Home Dashboard":
     st.header("🛒 Billing & Live Records Panel")
@@ -61,7 +61,7 @@ if choice == "📝 Home Dashboard":
     
     col1, col2 = st.columns([4, 5])
     
-    # LEFT PANEL: NEW INVOICE MAKER
+    # LEFT PANEL: INVOICE GENERATOR
     with col1:
         st.subheader(f"🆕 Current Invoice: #INV-{next_id:04d}")
         
@@ -91,13 +91,13 @@ if choice == "📝 Home Dashboard":
                 for item in cart:
                     stock_df.loc[stock_df["Candy_Name"] == item["Candy_Name"], "Available_Stock"] -= item["Qty"]
                     new_row = pd.DataFrame([{
-                        "Invoice_ID": next_id, 
+                        "Invoice_ID": int(next_id), 
                         "Date": str(date_sel), 
                         "Customer_Name": cust_name if cust_name.strip() != "" else "Walk-in Customer",
                         "Candy_Name": item["Candy_Name"], 
-                        "Qty": item["Qty"], 
-                        "Rate": item["Rate"], 
-                        "Total_Amount": item["Total_Amount"]
+                        "Qty": int(item["Qty"]), 
+                        "Rate": float(item["Rate"]), 
+                        "Total_Amount": float(item["Total_Amount"])
                     }])
                     inv_df = pd.concat([inv_df, new_row], ignore_index=True)
                 
@@ -108,7 +108,7 @@ if choice == "📝 Home Dashboard":
                 st.session_state["form_reset_token"] += 1
                 st.rerun()
 
-    # RIGHT PANEL: INVOICES CARD LIST
+    # RIGHT PANEL: RECORD CARDS WITH REBUILT FORMAT STRING TEMPLATE
     with col2:
         st.subheader("📋 Active Live Invoices List")
         if inv_df.empty:
@@ -129,9 +129,10 @@ if choice == "📝 Home Dashboard":
                 inv_qty_total = int(single_inv["Qty"].sum())
                 
                 saved_cust_name = single_inv["Customer_Name"].values[0] if "Customer_Name" in single_inv.columns else "Walk-in Customer"
+                formatted_id_str = f"{int(target_id):04d}" # Hard string block lock
                 
                 with st.container(border=True):
-                    st.markdown(f"### 🧾 Invoice #INV-{int(target_id):04d}")
+                    st.markdown(f"### 🧾 Invoice #INV-{formatted_id_str}")
                     st.write(f"👤 **Customer Name:** {saved_cust_name}")
                     st.write(f"📅 **Date:** {inv_date} | 🔢 **Total Qty:** {inv_qty_total} Pcs")
                     st.markdown(f"💰 **Grand Total Bill: ₹{inv_total:,.2f}**")
@@ -141,20 +142,19 @@ if choice == "📝 Home Dashboard":
                     for _, r in single_inv.iterrows():
                         table_rows += f"""
                         <tr style="border-bottom: 1px solid #ddd;">
-                            <td style="padding: 10px; text-align: center;">{sr_no}</td>
-                            <td style="padding: 10px;">{r['Candy_Name']}</td>
-                            <td style="padding: 10px; text-align: center;">{r['Qty']}</td>
-                            <td style="padding: 10px; text-align: right;">₹{float(r['Rate']):,.2f}</td>
-                            <td style="padding: 10px; text-align: right;">₹{float(r['Total_Amount']):,.2f}</td>
+                            <td style="padding: 12px; text-align: center;">{sr_no}</td>
+                            <td style="padding: 12px;">{r['Candy_Name']}</td>
+                            <td style="padding: 12px; text-align: center;">{int(r['Qty'])}</td>
+                            <td style="padding: 12px; text-align: right;">₹{float(r['Rate']):,.2f}</td>
+                            <td style="padding: 12px; text-align: right;">₹{float(r['Total_Amount']):,.2f}</td>
                         </tr>
                         """
                         sr_no += 1
                     
-                    # REBUILT PRINT WINDOW WITH CLEAN SPACING AND NUMBER MATH FORMATTING
                     html_code = f"""
                     <html>
                     <head>
-                        <title>Invoice_INV_{int(target_id):04d}</title>
+                        <title>Invoice_INV_{formatted_id_str}</title>
                         <style>
                             @page {{
                                 size: A4;
@@ -170,16 +170,15 @@ if choice == "📝 Home Dashboard":
                                 width: 100%;
                                 max-width: 800px;
                                 margin: auto;
-                                padding: 10px;
                             }}
                             .header-table {{
                                 width: 100%;
-                                margin-bottom: 40px;
+                                margin-bottom: 50px;
                                 border-collapse: collapse;
                             }}
                             .title-heading {{
                                 color: #e056fd;
-                                font-size: 32px;
+                                font-size: 34px;
                                 margin: 0;
                                 font-weight: bold;
                                 letter-spacing: 1px;
@@ -187,17 +186,18 @@ if choice == "📝 Home Dashboard":
                             .main-table {{
                                 width: 100%;
                                 border-collapse: collapse;
-                                margin-top: 20px;
+                                margin-top: 30px;
                             }}
                             .main-table th {{
                                 background-color: #f8f9fa;
                                 color: #333;
                                 font-weight: bold;
-                                padding: 12px;
-                                border-bottom: 2px solid #ddd;
+                                padding: 14px 12px;
+                                border-bottom: 2px solid #333;
                                 border-top: 1px solid #ddd;
                             }}
-                            .info-block {{
+                            .info-data-cell {{
+                                text-align: right; 
                                 font-size: 15px; 
                                 line-height: 1.8;
                             }}
@@ -209,11 +209,11 @@ if choice == "📝 Home Dashboard":
                                 <tr>
                                     <td style="vertical-align: top;">
                                         <h1 class="title-heading">🍧 CHUSKI LIVE CANDY</h1>
-                                        <span style="font-size: 14px; color: #666; font-style: italic;">Pure Joy in Every Frozen Bite!</span>
+                                        <div style="font-size: 14px; color: #666; font-style: italic; margin-top: 4px;">Pure Joy in Every Frozen Bite!</div>
                                     </td>
-                                    <td style="text-align: right; vertical-align: top;" class="info-block">
-                                        <span style="font-size: 24px; font-weight: bold; color: #333; display: block; margin-bottom: 8px;">TAX INVOICE</span>
-                                        <b>Invoice No:</b> #INV-{int(target_id):04d}<br/>
+                                    <td class="info-data-cell" style="vertical-align: top;">
+                                        <div style="font-size: 26px; font-weight: bold; color: #333; margin-bottom: 12px; letter-spacing: 1px;">TAX INVOICE</div>
+                                        <b>Invoice No:</b> #INV-{formatted_id_str}<br/>
                                         <b>Date:</b> {inv_date}<br/>
                                         <b>Customer Name:</b> {saved_cust_name}
                                     </td>
@@ -232,16 +232,16 @@ if choice == "📝 Home Dashboard":
                                 </thead>
                                 <tbody>
                                     {table_rows}
-                                    <tr style="font-weight: bold; font-size: 15px;">
-                                        <td colspan="2" style="padding: 16px 10px; text-align: right; border-top: 2px solid #333;">TOTAL SUMMARY:</td>
-                                        <td style="padding: 16px 10px; text-align: center; border-top: 2px solid #333;">{inv_qty_total} Pcs</td>
+                                    <tr style="font-weight: bold; font-size: 16px;">
+                                        <td colspan="2" style="padding: 20px 10px; text-align: right; border-top: 2px solid #333;">TOTAL SUMMARY:</td>
+                                        <td style="padding: 20px 10px; text-align: center; border-top: 2px solid #333;">{inv_qty_total} Pcs</td>
                                         <td style="border-top: 2px solid #333;"></td>
-                                        <td style="padding: 16px 10px; text-align: right; color: #e056fd; font-size: 16px; border-top: 2px solid #333;">₹{inv_total:,.2f}</td>
+                                        <td style="padding: 20px 10px; text-align: right; color: #e056fd; border-top: 2px solid #333;">₹{inv_total:,.2f}</td>
                                     </tr>
                                 </tbody>
                             </table>
                             
-                            <div style="margin-top: 80px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
+                            <div style="margin-top: 100px; text-align: center; border-top: 1px dashed #ccc; padding-top: 20px;">
                                 <p style="font-size: 14px; color: #555; margin: 0;">Thank you for your business! Visit us again. 🙏</p>
                             </div>
                         </div>
@@ -257,7 +257,7 @@ if choice == "📝 Home Dashboard":
                         st.download_button(
                             label="🖨️ Download / Print A4 PDF",
                             data=html_code,
-                            file_name=f"Invoice_INV_{int(target_id):04d}.html",
+                            file_name=f"Invoice_INV_{formatted_id_str}.html",
                             mime="text/html",
                             key=f"print_html_{int(target_id)}",
                             use_container_width=True
@@ -267,7 +267,7 @@ if choice == "📝 Home Dashboard":
                         st.download_button(
                             label="📥 Download as CSV Data", 
                             data=single_csv, 
-                            file_name=f"Invoice_INV_{int(target_id):04d}.csv", 
+                            file_name=f"Invoice_INV_{formatted_id_str}.csv", 
                             mime="text/csv",
                             key=f"dl_csv_{int(target_id)}",
                             use_container_width=True
@@ -283,7 +283,7 @@ if choice == "📝 Home Dashboard":
                         if st.button("🚨 CONFIRM DELETE", key=f"del_btn_{int(target_id)}", type="primary", use_container_width=True):
                             inv_df = inv_df[inv_df["Invoice_ID"] != target_id]
                             inv_df.to_csv(INV_DB, index=False)
-                            st.warning(f"Deleted #INV-{int(target_id):04d}")
+                            st.warning(f"Deleted #INV-{formatted_id_str}")
                             st.rerun()
                     
                     if edit_mode:
